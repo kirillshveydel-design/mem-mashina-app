@@ -42,6 +42,9 @@
           <input type="file" id="fileInput" accept="image/*" style="display:none">
         </label>
       </div>
+      <div class="row" style="margin-top:10px; justify-content:center;">
+        <button id="importPhotoBtn">📂 Импортировать из Claude Code</button>
+      </div>
     </div>
 
     <div class="card" id="editorCard" style="display:none">
@@ -195,8 +198,13 @@
             Загрузить проект (JSON)
             <input type="file" id="loadProjectInput" accept="application/json" style="display:none">
           </label>
+          <button id="importVideoBtn">📂 Импортировать из Claude Code</button>
           <button id="videoTrophyBtn">Структуру в Трофеи</button>
           <span class="muted">Автосохранение в этот браузер включено.</span>
+        </div>
+        <div class="row" id="importVideoFallback" style="display:none; margin-top:8px; align-items:flex-start;">
+          <textarea id="importVideoTextarea" placeholder="Вставь сюда JSON проекта из Claude Code" style="flex:1; min-height:80px; font-family:monospace; font-size:12px;"></textarea>
+          <button id="importVideoTextareaApplyBtn">Применить</button>
         </div>
       </div>
 

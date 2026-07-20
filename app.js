@@ -72,7 +72,7 @@ document.addEventListener('click', e => {
 
 // --- Общее хранилище очереди постов и трофеев (IndexedDB, без внешних сервисов) ---
 const MM_DB_NAME = 'mem-mashina';
-const MM_DB_VERSION = 1;
+const MM_DB_VERSION = 2;
 
 function mmOpenDB() {
   return new Promise((resolve, reject) => {
@@ -85,10 +85,79 @@ function mmOpenDB() {
       if (!db.objectStoreNames.contains('trophies')) {
         db.createObjectStore('trophies', { keyPath: 'id', autoIncrement: true });
       }
+      if (!db.objectStoreNames.contains('handles')) {
+        db.createObjectStore('handles'); // out-of-line keys: 'outputReadyDir' -> FileSystemDirectoryHandle
+      }
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
+}
+
+async function mmSaveHandle(key, handle) {
+  const db = await mmOpenDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('handles', 'readwrite');
+    const req = tx.objectStore('handles').put(handle, key);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function mmGetHandle(key) {
+  const db = await mmOpenDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('handles', 'readonly');
+    const req = tx.objectStore('handles').get(key);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function mmVerifyPermission(handle, mode) {
+  const opts = { mode };
+  try {
+    if ((await handle.queryPermission(opts)) === 'granted') return true;
+    if ((await handle.requestPermission(opts)) === 'granted') return true;
+  } catch (e) { /* пользователь мог отозвать доступ в системе — просто просим заново */ }
+  return false;
+}
+
+// --- Импорт проекта из output/ready/ (File System Access API, если браузер поддерживает) ---
+const MM_DIR_HANDLE_KEY = 'outputReadyDir';
+
+const MM_FILE_TYPES = {
+  video: [{ description: 'JSON проект видео', accept: { 'application/json': ['.json'] } }],
+  photo: [{ description: 'PNG картинка', accept: { 'image/png': ['.png'] } }]
+};
+
+async function mmImportProjectFile(kind) {
+  if (!window.showOpenFilePicker) return { supported: false };
+
+  let dirHandle = await mmGetHandle(MM_DIR_HANDLE_KEY).catch(() => null);
+  if (dirHandle && !(await mmVerifyPermission(dirHandle, 'read'))) dirHandle = null;
+
+  if (!dirHandle && window.showDirectoryPicker) {
+    toast('Выбери папку output/ready/ — запомню её на будущее');
+    try {
+      dirHandle = await window.showDirectoryPicker({ mode: 'read' });
+      await mmSaveHandle(MM_DIR_HANDLE_KEY, dirHandle);
+    } catch (e) {
+      dirHandle = null; // пользователь отменил выбор папки — всё равно откроем обычный пикер файла
+    }
+  }
+
+  const opts = { types: MM_FILE_TYPES[kind], excludeAcceptAllOption: false };
+  if (dirHandle) opts.startIn = dirHandle;
+
+  try {
+    const [fileHandle] = await window.showOpenFilePicker(opts);
+    const file = await fileHandle.getFile();
+    return { supported: true, file };
+  } catch (e) {
+    if (e && e.name === 'AbortError') return { supported: true, cancelled: true };
+    return { supported: true, error: e };
+  }
 }
 
 async function mmAdd(storeName, entry) {

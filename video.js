@@ -424,26 +424,60 @@
     toast('Проект сохранён');
   });
 
+  function applyProjectJson(text) {
+    const data = JSON.parse(text);
+    state.badges = data.badges || [];
+    state.eventText = data.eventText || '';
+    nextId = (Math.max(0, ...state.badges.map(b => b.id)) || 0) + 1;
+    eventTextInput.value = state.eventText;
+    selectedId = null;
+    renderAll();
+    autosave();
+  }
+
   document.getElementById('loadProjectInput').addEventListener('change', e => {
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = ev => {
       try {
-        const data = JSON.parse(ev.target.result);
-        state.badges = data.badges || [];
-        state.eventText = data.eventText || '';
-        nextId = (Math.max(0, ...state.badges.map(b => b.id)) || 0) + 1;
-        eventTextInput.value = state.eventText;
-        selectedId = null;
-        renderAll();
-        autosave();
+        applyProjectJson(ev.target.result);
         toast('Проект загружен');
       } catch (err) {
         toast('Битый JSON проекта');
       }
     };
     reader.readAsText(file);
+  });
+
+  // --- Импорт проекта из output/ready/ (File System Access API) + фолбэк для Safari/Firefox ---
+  const importVideoFallback = document.getElementById('importVideoFallback');
+  document.getElementById('importVideoBtn').addEventListener('click', async () => {
+    const result = await mmImportProjectFile('video');
+    if (!result.supported) {
+      importVideoFallback.style.display = 'flex';
+      toast('Браузер не поддерживает быстрый импорт — вставь JSON вручную ниже');
+      return;
+    }
+    if (result.cancelled) return;
+    if (result.error) { toast('Не удалось открыть файл: ' + result.error.message); return; }
+    try {
+      applyProjectJson(await result.file.text());
+      toast('Проект импортирован из ' + result.file.name);
+    } catch (err) {
+      toast('Битый JSON проекта');
+    }
+  });
+
+  document.getElementById('importVideoTextareaApplyBtn').addEventListener('click', () => {
+    const textarea = document.getElementById('importVideoTextarea');
+    try {
+      applyProjectJson(textarea.value);
+      textarea.value = '';
+      toast('Проект импортирован');
+    } catch (err) {
+      toast('Битый JSON проекта');
+    }
   });
 
   document.getElementById('newVideoBtn').addEventListener('click', () => {

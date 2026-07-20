@@ -56,6 +56,19 @@
     if (e.target.files[0]) loadImageFromFile(e.target.files[0]);
   });
 
+  // --- Импорт готового PNG из output/ready/ (File System Access API) ---
+  document.getElementById('importPhotoBtn').addEventListener('click', async () => {
+    const result = await mmImportProjectFile('photo');
+    if (!result.supported) {
+      // Браузер не поддерживает FSA (Safari/Firefox) — честный фолбэк: обычный файловый диалог.
+      fileInput.click();
+      return;
+    }
+    if (result.cancelled) return;
+    if (result.error) { toast('Не удалось открыть файл: ' + result.error.message); return; }
+    loadImageFromFile(result.file);
+  });
+
   ['dragenter', 'dragover'].forEach(evt =>
     dropzone.addEventListener(evt, e => { e.preventDefault(); dropzone.classList.add('dragover'); })
   );
