@@ -37,6 +37,7 @@
   let barDragCtx = null; // для перетаскивания/тримминга на таймлайне
   let pendingTrophy = null; // структура плашек, ждущая следующего загруженного видео
   let trimStart = 0, trimEnd = 0; // диапазон экспорта
+  let lastWebmBlob = null, lastMp4Blob = null; // для тестов/диагностики
 
   function newBadge() {
     const dur = video.duration || 5;
@@ -534,23 +535,23 @@
     video.currentTime = rangeStart;
     await new Promise(res => { video.onseeked = res; });
 
-    let rafId;
     let stopped = false;
+    // setInterval вместо requestAnimationFrame: rAF троттлится (или вовсе не тикает)
+    // в свёрнутой/неактивной вкладке, из-за чего экспорт в фоне мог зависнуть
+    // с пустым результатом. setInterval продолжает работать независимо от фокуса вкладки.
     function drawFrame() {
       ctx.drawImage(video, 0, 0, cw, ch);
       const t = video.currentTime;
       state.badges.forEach(b => drawBadgeOnCanvas(ctx, cw, ch, b, t));
       drawEventPlaque(ctx, cw, ch);
-      if (!video.ended && !stopped && video.currentTime < rangeEnd) {
-        rafId = requestAnimationFrame(drawFrame);
-      }
     }
+    const drawIntervalId = setInterval(drawFrame, 1000 / 30);
 
     const finished = new Promise(resolve => {
       function stop() {
         if (stopped) return;
         stopped = true;
-        cancelAnimationFrame(rafId);
+        clearInterval(drawIntervalId);
         video.pause();
         recorder.stop();
         resolve();
@@ -567,9 +568,19 @@
     return new Blob(chunks, { type: 'video/webm' });
   }
 
+  const MP4_RATE_KEY = 'mm_mp4_conversion_rate_sec_per_10s';
+
+  function updateMp4RateHint() {
+    const hintEl = document.getElementById('mp4RateHint');
+    if (!hintEl) return;
+    const rate = localStorage.getItem(MP4_RATE_KEY);
+    hintEl.textContent = rate ? `Ориентир: конвертация в MP4 ~${rate} сек на каждые 10 сек видео (по замеру на этом устройстве).` : '';
+  }
+
   async function exportVideo(kind) {
     const webmBlob = await renderToWebmBlob();
     if (!webmBlob) return;
+    lastWebmBlob = webmBlob;
 
     if (kind === 'webm') {
       downloadBlob(webmBlob, 'mem-' + Date.now() + '.webm');
@@ -586,11 +597,17 @@
       try {
         await ensureFFmpeg();
         exportStatus.textContent = 'Конвертирую в MP4... 0%';
+        const t0 = performance.now();
         const mp4Blob = await convertToMp4(webmBlob, pct => {
           exportStatus.textContent = `Конвертирую в MP4... ${pct}%`;
         });
+        const elapsedSec = (performance.now() - t0) / 1000;
+        const ratePer10s = (elapsedSec / (rangeSec / 10)).toFixed(1);
+        localStorage.setItem(MP4_RATE_KEY, ratePer10s);
+        updateMp4RateHint();
+        lastMp4Blob = mp4Blob;
         downloadBlob(mp4Blob, 'mem-' + Date.now() + '.mp4');
-        exportStatus.textContent = 'MP4 готов и скачан.';
+        exportStatus.textContent = `MP4 готов и скачан (конвертация заняла ${elapsedSec.toFixed(1)} сек).`;
       } catch (e) {
         console.warn('ffmpeg.wasm недоступен', e);
         downloadBlob(webmBlob, 'mem-' + Date.now() + '.webm');
@@ -674,9 +691,13 @@
     toast('Структура сохранена в Трофеи (без видео — подставь новое видео при повторном использовании)');
   });
 
+  updateMp4RateHint();
+
   // Экспонируем для межтабового моста (queue.js) и тестов
   window.__memMachineVideo = {
     state, interpPos,
-    setPendingTrophy(t) { pendingTrophy = t; toast('Загрузи видео — структура плашек применится автоматически'); }
+    setPendingTrophy(t) { pendingTrophy = t; toast('Загрузи видео — структура плашек применится автоматически'); },
+    get lastWebmBlob() { return lastWebmBlob; },
+    get lastMp4Blob() { return lastMp4Blob; }
   };
 })();

@@ -16,13 +16,59 @@ function fitFont(candidates) {
   return candidates[0];
 }
 
+function mmShowUpdateBanner() {
+  const el = document.getElementById('toast');
+  if (!el) return;
+  el.innerHTML = '';
+  const span = document.createElement('span');
+  span.textContent = 'Доступно обновление, нажмите чтобы применить ↻';
+  span.style.cursor = 'pointer';
+  span.addEventListener('click', mmForceUpdate);
+  el.appendChild(span);
+  el.style.display = 'block';
+}
+
+async function mmForceUpdate() {
+  const regs = await navigator.serviceWorker.getRegistrations();
+  for (const r of regs) await r.unregister();
+  const keys = await caches.keys();
+  for (const k of keys) await caches.delete(k);
+  window.location.reload();
+}
+
+async function mmShowSwVersion() {
+  const el = document.getElementById('swVersion');
+  if (!el) return;
+  try {
+    const res = await fetch('sw.js', { cache: 'no-store' });
+    const text = await res.text();
+    const m = text.match(/CACHE_NAME = '([^']+)'/);
+    if (m) el.textContent = m[1].replace('mem-mashina-', '');
+  } catch (e) { /* тихо игнорируем — версия не критична для работы */ }
+}
+
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch(err => {
+    navigator.serviceWorker.register('sw.js').then(reg => {
+      reg.addEventListener('updatefound', () => {
+        const newWorker = reg.installing;
+        if (!newWorker) return;
+        newWorker.addEventListener('statechange', () => {
+          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+            mmShowUpdateBanner();
+          }
+        });
+      });
+    }).catch(err => {
       console.warn('SW registration failed', err);
     });
   });
+  mmShowSwVersion();
 }
+
+document.addEventListener('click', e => {
+  if (e.target && e.target.id === 'updateAppBtn') mmForceUpdate();
+});
 
 // --- Общее хранилище очереди постов и трофеев (IndexedDB, без внешних сервисов) ---
 const MM_DB_NAME = 'mem-mashina';
@@ -100,22 +146,37 @@ async function mmDataUrlToBlob(dataUrl) {
 }
 
 // --- Бэкап/восстановление одной кнопкой (localStorage целиком + IndexedDB) ---
-async function mmBuildBackup() {
+const MM_BACKUP_SIZE_WARN = 50 * 1024 * 1024; // 50 МБ
+
+async function mmBuildBackup(liteMode) {
   const lsSnapshot = {};
   for (let i = 0; i < localStorage.length; i++) {
     const k = localStorage.key(i);
     lsSnapshot[k] = localStorage.getItem(k);
   }
-  const queueItems = await mmGetAll('queue');
-  const queueSerialized = [];
-  for (const it of queueItems) {
-    const { blob, ...rest } = it;
-    queueSerialized.push({ ...rest, blobDataUrl: await mmBlobToDataUrl(blob) });
+  let queueSerialized = [];
+  let queueSkipped = 0;
+  if (liteMode) {
+    queueSkipped = (await mmGetAll('queue')).length;
+  } else {
+    const queueItems = await mmGetAll('queue');
+    for (const it of queueItems) {
+      const { blob, ...rest } = it;
+      queueSerialized.push({ ...rest, blobDataUrl: await mmBlobToDataUrl(blob) });
+    }
   }
-  const trophyItems = await mmGetAll('trophies');
+  let trophyItems = await mmGetAll('trophies');
+  let trophySkipped = 0;
+  if (liteMode) {
+    const before = trophyItems.length;
+    trophyItems = trophyItems.filter(t => t.kind !== 'photo'); // фото-трофеи содержат картинку — это медиа
+    trophySkipped = before - trophyItems.length;
+  }
   return {
     version: 1,
     exportedAt: new Date().toISOString(),
+    liteMode: !!liteMode,
+    skippedCounts: { queue: queueSkipped, trophies: trophySkipped },
     localStorage: lsSnapshot,
     queue: queueSerialized,
     trophies: trophyItems
@@ -131,6 +192,7 @@ async function mmRestoreBackup(data) {
   await mmClearStore('queue');
   for (const it of data.queue || []) {
     const { id, blobDataUrl, ...rest } = it;
+    if (!blobDataUrl) continue; // lite-бэкап: медиа не сохранено, запись пропускаем
     const blob = await mmDataUrlToBlob(blobDataUrl);
     await mmAdd('queue', { ...rest, blob });
   }
@@ -141,19 +203,64 @@ async function mmRestoreBackup(data) {
   }
 }
 
+function mmDownloadBackup(data) {
+  const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+  const link = document.createElement('a');
+  link.download = 'mem-mashina-backup-' + Date.now() + '.json';
+  link.href = URL.createObjectURL(blob);
+  link.click();
+  const skipped = data.skippedCounts || {};
+  const skipMsg = data.liteMode ? ` (без медиа: пропущено ${skipped.queue || 0} черновиков, ${skipped.trophies || 0} фото-трофеев)` : '';
+  toast('Бэкап сохранён' + skipMsg);
+}
+
+function mmShowBackupSizeDialog(fullData, sizeMb) {
+  const el = document.getElementById('toast');
+  if (!el) return;
+  el.innerHTML = '';
+  el.style.display = 'block';
+  const msg = document.createElement('div');
+  msg.textContent = `Бэкап ${sizeMb} МБ, это много из-за видео в очереди.`;
+  el.appendChild(msg);
+  const row = document.createElement('div');
+  row.style.marginTop = '6px';
+  row.style.display = 'flex';
+  row.style.gap = '8px';
+  row.style.justifyContent = 'center';
+
+  const liteBtn = document.createElement('button');
+  liteBtn.textContent = 'Только тексты и настройки';
+  liteBtn.addEventListener('click', async () => {
+    el.style.display = 'none';
+    const liteData = await mmBuildBackup(true);
+    mmDownloadBackup(liteData);
+  });
+
+  const fullBtn = document.createElement('button');
+  fullBtn.textContent = 'Всё равно всё';
+  fullBtn.addEventListener('click', () => {
+    el.style.display = 'none';
+    mmDownloadBackup(fullData);
+  });
+
+  row.appendChild(liteBtn);
+  row.appendChild(fullBtn);
+  el.appendChild(row);
+}
+
 function mmInitBackupUI() {
   const backupBtn = document.getElementById('backupBtn');
   const restoreInput = document.getElementById('restoreInput');
   if (!backupBtn || !restoreInput) return;
 
   backupBtn.addEventListener('click', async () => {
-    const data = await mmBuildBackup();
-    const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
-    const link = document.createElement('a');
-    link.download = 'mem-mashina-backup-' + Date.now() + '.json';
-    link.href = URL.createObjectURL(blob);
-    link.click();
-    toast('Бэкап сохранён');
+    const data = await mmBuildBackup(false);
+    const sizeBytes = new Blob([JSON.stringify(data)]).size;
+    if (sizeBytes > MM_BACKUP_SIZE_WARN) {
+      mmShowBackupSizeDialog(data, (sizeBytes / (1024 * 1024)).toFixed(1));
+    } else {
+      mmDownloadBackup(data);
+    }
   });
 
   restoreInput.addEventListener('change', async e => {

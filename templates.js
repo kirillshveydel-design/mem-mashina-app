@@ -4,8 +4,6 @@
   const imgflipGrid = document.getElementById('imgflipGrid');
   const imgflipCard = document.getElementById('imgflipCard');
   const imgflipEmpty = document.getElementById('imgflipEmpty');
-  const redditCard = document.getElementById('redditCard');
-  const redditGrid = document.getElementById('redditGrid');
   const statusText = document.getElementById('statusText');
   const ownFileInput = document.getElementById('ownFileInput');
 
@@ -79,36 +77,8 @@
     }
   }
 
-  async function loadReddit() {
-    try {
-      const res = await fetch('https://www.reddit.com/r/memes/hot.json?limit=15');
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const data = await res.json();
-      const posts = data.data.children
-        .map(c => c.data)
-        .filter(p => p.post_hint === 'image' || (p.url && /\.(jpg|jpeg|png)$/i.test(p.url)));
-      if (!posts.length) return;
-      redditGrid.innerHTML = '';
-      posts.forEach(p => {
-        const div = document.createElement('div');
-        div.className = 'tpl';
-        div.innerHTML = `<img src="${p.url}" loading="lazy" alt="${p.title}"><div class="name">${p.title}</div>`;
-        div.addEventListener('click', async () => {
-          const dataUrl = await toDataURL(p.url);
-          openInEditor(dataUrl);
-        });
-        redditGrid.appendChild(div);
-      });
-      redditCard.style.display = 'block';
-    } catch (e) {
-      console.warn('Reddit недоступен, скрываю секцию', e);
-      redditCard.style.display = 'none';
-    }
-  }
-
   document.getElementById('refreshBtn').addEventListener('click', () => {
     loadImgflip();
-    loadReddit();
   });
 
   document.getElementById('ownImageBtn').addEventListener('click', () => ownFileInput.click());
@@ -121,6 +91,6 @@
   });
 
   // По умолчанию показываем офлайн-пак — приложение работает без сети.
-  // Обновление из Imgflip/Reddit — по клику, бонусом.
+  // Обновление из Imgflip — по клику, бонусом.
   loadOfflinePack();
 })();

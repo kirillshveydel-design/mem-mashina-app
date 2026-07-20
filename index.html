@@ -12,13 +12,14 @@
 </head>
 <body>
 <header class="topbar">
-  <div class="brand">🦆 Мем-машина</div>
+  <div class="brand">🦆 Мем-машина <span class="muted" id="swVersion" style="font-size:11px; font-weight:normal;"></span></div>
   <div class="header-actions">
     <button id="backupBtn" title="Скачать бэкап всех данных">💾 Бэкап</button>
     <label class="btn" style="display:inline-block; margin:0;">
       Восстановить
       <input type="file" id="restoreInput" accept="application/json" style="display:none">
     </label>
+    <button id="updateAppBtn" title="Снять регистрацию SW, очистить кэш и перезагрузить">🔄 Обновить приложение</button>
   </div>
   <nav>
     <button data-tab="photo" class="active">Фото</button>
@@ -212,6 +213,7 @@
           </label>
         </div>
         <div class="muted" id="copyrightNote">⚠️ Если видео не твоё (TikTok/Reels чужого автора) — не вырезай водяные знаки, это красный флаг для модерации Threads. Безопаснее: свои записи экрана, лицензионные шаблоны, или кадры где ты меняешь смысл целиком (плашки + событие).</div>
+        <div class="muted" id="mp4RateHint"></div>
         <div class="muted" id="exportStatus"></div>
       </div>
     </div>
@@ -237,11 +239,6 @@
       <div id="imgflipEmpty" class="muted" style="display:none;">
         Imgflip недоступен из твоей сети. <button id="ownImageBtn">Загрузить свою картинку</button>
       </div>
-    </div>
-
-    <div class="card" id="redditCard" style="display:none;">
-      <h3 style="margin-top:0;">🔥 r/memes — горячее</h3>
-      <div id="redditGrid" class="grid"></div>
     </div>
 
     <input type="file" id="ownFileInput" accept="image/*" style="display:none">
