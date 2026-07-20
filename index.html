@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Мем-машина</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#111214">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">🦆 Мем-машина</div>
+  <div class="header-actions">
+    <button id="backupBtn" title="Скачать бэкап всех данных">💾 Бэкап</button>
+    <label class="btn" style="display:inline-block; margin:0;">
+      Восстановить
+      <input type="file" id="restoreInput" accept="application/json" style="display:none">
+    </label>
+  </div>
+  <nav>
+    <button data-tab="photo" class="active">Фото</button>
+    <button data-tab="video">Видео</button>
+    <button data-tab="templates">Шаблоны</button>
+    <button data-tab="queue">Очередь</button>
+    <button data-tab="notes">Блокнот</button>
+  </nav>
+</header>
+
+<main>
+
+  <!-- ===================== ФОТО ===================== -->
+  <section id="tab-photo">
+    <div class="card" id="dropcard">
+      <div class="dropzone" id="dropzone">
+        Перетащи картинку сюда, вставь из буфера (Ctrl+V) или
+        <label class="btn" style="display:inline-block; margin-top:8px;">
+          выбери файл
+          <input type="file" id="fileInput" accept="image/*" style="display:none">
+        </label>
+      </div>
+    </div>
+
+    <div class="card" id="editorCard" style="display:none">
+      <div class="row" style="align-items:flex-start">
+        <div style="flex: 2 1 420px; min-width:280px;">
+          <canvas id="canvas" style="width:100%; max-width:100%; touch-action:none; background:#000; border-radius:8px; cursor:grab;"></canvas>
+        </div>
+        <div style="flex: 1 1 260px; min-width:240px;" class="col">
+          <div class="col">
+            <label>Верхний текст</label>
+            <input type="text" id="topText" placeholder="ВЕРХНИЙ ТЕКСТ">
+          </div>
+          <div class="col">
+            <label>Нижний текст</label>
+            <input type="text" id="bottomText" placeholder="НИЖНИЙ ТЕКСТ">
+          </div>
+          <div class="row">
+            <div class="col">
+              <label>Размер шрифта</label>
+              <input type="range" id="fontSize" min="12" max="140" value="46">
+            </div>
+            <div class="col">
+              <label>Цвет</label>
+              <input type="color" id="fontColor" value="#ffffff">
+            </div>
+            <div class="col">
+              <label>Обводка</label>
+              <input type="color" id="strokeColor" value="#000000">
+            </div>
+          </div>
+          <div class="row">
+            <label style="display:flex; align-items:center; gap:6px; margin:0;">
+              <input type="checkbox" id="capsToggle" checked style="width:auto;"> CAPS
+            </label>
+          </div>
+          <div class="col">
+            <label>Кадрирование</label>
+            <div class="row">
+              <button id="cropSquare">1:1</button>
+              <button id="cropPortrait">4:5</button>
+              <button id="cropReset">Без кропа</button>
+            </div>
+          </div>
+          <div class="muted">Подсказка: перетаскивай подписи прямо на картинке мышкой или пальцем.</div>
+          <div class="row" style="margin-top:8px;">
+            <button class="primary" id="exportBtn">Скачать PNG</button>
+            <button id="queueBtn">В очередь постов</button>
+            <button id="trophyBtn">В Трофеи</button>
+            <button id="resetBtn">Новая картинка</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== ВИДЕО ===================== -->
+  <section id="tab-video" style="display:none;">
+    <div class="card" id="videoDropcard">
+      <div class="dropzone" id="videoDropzone">
+        Перетащи видео (mp4/webm/mov, до 100 МБ) или
+        <label class="btn" style="display:inline-block; margin-top:8px;">
+          выбери файл
+          <input type="file" id="videoFileInput" accept="video/*" style="display:none">
+        </label>
+      </div>
+    </div>
+
+    <div id="editorArea" style="display:none;">
+      <div class="card">
+        <div id="stage">
+          <video id="video" playsinline></video>
+          <div id="overlayLayer"></div>
+          <div id="eventPlaque" style="display:none;"></div>
+        </div>
+        <div class="row" style="margin-top:10px;">
+          <button id="playBtn">▶ Play</button>
+          <span class="muted" id="timeLabel">0.00 / 0.00</span>
+        </div>
+        <div id="timelineTrack">
+          <div id="playheadLine"></div>
+        </div>
+        <div id="tracksContainer"></div>
+        <div class="length-warning" id="lengthWarning" style="display:none;"></div>
+        <div class="row">
+          <div class="col">
+            <label>Обрезка с (сек)</label>
+            <input type="number" id="trimStart" step="0.1" min="0" style="width:90px;">
+          </div>
+          <div class="col">
+            <label>по (сек)</label>
+            <input type="number" id="trimEnd" step="0.1" min="0" style="width:90px;">
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="row">
+          <button class="primary" id="addBadgeBtn">+ Новая плашка</button>
+          <button id="deleteBadgeBtn">Удалить плашку</button>
+        </div>
+        <div id="badgeEditor" style="display:none; margin-top:10px;">
+          <div class="row">
+            <div class="col" style="flex:2 1 200px;">
+              <label>Текст плашки</label>
+              <input type="text" id="badgeText" placeholder="Saw your post on LinkedIn">
+            </div>
+            <div class="col">
+              <label>Размер шрифта</label>
+              <input type="range" id="badgeFontSize" min="10" max="60" value="22">
+            </div>
+            <div class="col">
+              <label>Цвет</label>
+              <input type="color" id="badgeColor" value="#ffffff">
+            </div>
+            <div class="col">
+              <label>Обводка</label>
+              <input type="color" id="badgeStroke" value="#000000">
+            </div>
+          </div>
+          <div class="row">
+            <div class="col">
+              <label>Начало (сек)</label>
+              <input type="number" id="badgeStart" step="0.1" min="0" style="width:90px;">
+            </div>
+            <div class="col">
+              <label>Конец (сек)</label>
+              <input type="number" id="badgeEnd" step="0.1" min="0" style="width:90px;">
+            </div>
+            <div class="col">
+              <label>&nbsp;</label>
+              <button id="addKeyBtn">+ ключ на текущем кадре</button>
+            </div>
+          </div>
+          <div class="col">
+            <label>Ключевые кадры (мин. 2, для движения плашки за объектом)</label>
+            <div id="kfList"></div>
+          </div>
+          <div class="muted">Перетаскивай плашку прямо на видео — позиция подхватится в кнопку «+ ключ».</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <label>Нижняя плашка-событие (прибита к низу кадра)</label>
+        <input type="text" id="eventText" placeholder="Founder Announces New Funding Round" style="width:100%;">
+      </div>
+
+      <div class="card">
+        <div class="row">
+          <button id="saveProjectBtn">Сохранить проект (JSON)</button>
+          <label class="btn" style="display:inline-block;">
+            Загрузить проект (JSON)
+            <input type="file" id="loadProjectInput" accept="application/json" style="display:none">
+          </label>
+          <button id="videoTrophyBtn">Структуру в Трофеи</button>
+          <span class="muted">Автосохранение в этот браузер включено.</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="row">
+          <button class="primary" id="exportWebmBtn">Скачать WebM</button>
+          <button id="exportMp4Btn">Скачать MP4</button>
+          <button id="saveDraftBtn">В очередь постов</button>
+          <button id="newVideoBtn">Новое видео</button>
+        </div>
+        <div class="row">
+          <label style="display:flex; align-items:center; gap:6px; margin:0;">
+            <input type="checkbox" id="muteToggle" style="width:auto;"> Убрать звук
+          </label>
+        </div>
+        <div class="muted" id="copyrightNote">⚠️ Если видео не твоё (TikTok/Reels чужого автора) — не вырезай водяные знаки, это красный флаг для модерации Threads. Безопаснее: свои записи экрана, лицензионные шаблоны, или кадры где ты меняешь смысл целиком (плашки + событие).</div>
+        <div class="muted" id="exportStatus"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== ШАБЛОНЫ ===================== -->
+  <section id="tab-templates" style="display:none;">
+    <div class="card">
+      <div class="row">
+        <button class="primary" id="refreshBtn">Обновить тренды</button>
+        <span class="muted" id="statusText"></span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0;">📦 Офлайн-пак (30 шаблонов, работает без сети)</h3>
+      <div id="packGrid" class="grid"></div>
+    </div>
+
+    <div class="card" id="imgflipCard" style="display:none;">
+      <h3 style="margin-top:0;">🌐 Из сети (Imgflip)</h3>
+      <div id="imgflipGrid" class="grid"></div>
+      <div id="imgflipEmpty" class="muted" style="display:none;">
+        Imgflip недоступен из твоей сети. <button id="ownImageBtn">Загрузить свою картинку</button>
+      </div>
+    </div>
+
+    <div class="card" id="redditCard" style="display:none;">
+      <h3 style="margin-top:0;">🔥 r/memes — горячее</h3>
+      <div id="redditGrid" class="grid"></div>
+    </div>
+
+    <input type="file" id="ownFileInput" accept="image/*" style="display:none">
+  </section>
+
+  <!-- ===================== ОЧЕРЕДЬ ===================== -->
+  <section id="tab-queue" style="display:none;">
+    <div class="card">
+      <div class="row" style="justify-content:space-between;">
+        <div>
+          <div class="muted">Патронов в запасе</div>
+          <div class="ammo" id="ammoCount">0/6</div>
+        </div>
+        <div class="muted">Держи запас минимум на 3 дня вперёд (6 постов: утро+вечер).</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row" style="justify-content:space-between; align-items:center;">
+        <h3 style="margin:0;">Черновики в очереди</h3>
+        <select id="sortSelect">
+          <option value="date-asc">Сначала ближайшие</option>
+          <option value="date-desc">Сначала дальние</option>
+          <option value="created-desc">Сначала новые</option>
+        </select>
+      </div>
+      <div id="queueList" style="margin-top:10px;"></div>
+      <div class="muted" id="queueEmpty" style="display:none;">Очередь пуста — сделай мем во «Фото» или «Видео» и жми «В очередь постов».</div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0;">🏆 Трофеи — проверенные форматы</h3>
+      <div class="muted" style="margin-bottom:10px;">Свои залетевшие форматы ценнее чужих трендов. Фото хранится вместе с картинкой, видео — как структура плашек (подставь новое видео при повторном использовании).</div>
+      <div id="trophyList"></div>
+      <div class="muted" id="trophyEmpty" style="display:none;">Трофеев пока нет.</div>
+    </div>
+  </section>
+
+  <!-- ===================== БЛОКНОТ ===================== -->
+  <section id="tab-notes" style="display:none;">
+    <div class="card">
+      <div class="row">
+        <input type="text" id="noteInput" placeholder="Например: таможня завернула груз из-за запятой в инвойсе" style="flex:1;">
+        <button class="primary" id="noteAddBtn">Записать</button>
+      </div>
+      <div class="muted" style="margin-top:6px;">Сырьё для вечерних постов — кидай сюда фразы из жизни по горячим следам.</div>
+    </div>
+
+    <div class="card">
+      <div class="row" style="justify-content:space-between; align-items:center;">
+        <h3 style="margin:0;">Наблюдения</h3>
+        <button id="notesExportBtn">Экспорт в текст (буфер)</button>
+      </div>
+      <div id="notesList" style="margin-top:10px;"></div>
+      <div class="muted" id="notesEmpty" style="display:none;">Пока пусто.</div>
+    </div>
+  </section>
+
+</main>
+
+<div class="toast" id="toast" style="display:none;"></div>
+
+<script src="app.js"></script>
+<script src="editor.js"></script>
+<script src="video.js"></script>
+<script src="templates.js"></script>
+<script src="queue.js"></script>
+<script src="notes.js"></script>
+<script src="tabs.js"></script>
+</body>
+</html>
