@@ -242,7 +242,7 @@
     document.querySelectorAll('#photoChecklist .chk').forEach(c => c.checked = false);
   });
 
-  document.getElementById('resetBtn').addEventListener('click', () => {
+  function resetEditor() {
     img = null;
     cropMode = null;
     topTextInput.value = '';
@@ -251,7 +251,10 @@
     editorCard.style.display = 'none';
     dropcard.style.display = 'block';
     fileInput.value = '';
-  });
+  }
+
+  document.getElementById('resetBtn').addEventListener('click', resetEditor);
+  document.getElementById('closeEditorBtn').addEventListener('click', resetEditor);
 
   // --- Загрузка трофея (структура + картинка) — вызывается из вкладки «Очередь» ---
   function loadTrophy(t) {
