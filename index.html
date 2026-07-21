@@ -107,6 +107,24 @@
               <button id="cropReset">Без кропа</button>
             </div>
           </div>
+          <div class="col">
+            <label>Чужая подпись на картинке</label>
+            <button id="stripDetectBtn">🩹 Убрать полосы с текстом</button>
+            <div class="muted" style="margin-top:4px;">Работает только для однотонной полосы у самого края (сверху/снизу) — если подпись прямо по центру фото, этот инструмент её не тронет, содержимое не потеряется.</div>
+            <div id="stripPanel" style="display:none; margin-top:6px;">
+              <div class="row">
+                <div class="col" style="flex:1;">
+                  <label>Сверху: <span id="stripTopVal">0</span>%</label>
+                  <input type="range" id="stripTopInput" min="0" max="35" value="0" style="width:100%;">
+                </div>
+                <div class="col" style="flex:1;">
+                  <label>Снизу: <span id="stripBottomVal">0</span>%</label>
+                  <input type="range" id="stripBottomInput" min="0" max="35" value="0" style="width:100%;">
+                </div>
+              </div>
+              <button id="stripResetBtn" style="margin-top:6px;">Сбросить</button>
+            </div>
+          </div>
           <div class="muted">Подсказка: перетаскивай подписи прямо на картинке мышкой или пальцем.</div>
           <div class="editor-checklist" id="photoChecklist">
             <label><input type="checkbox" class="chk"> Понятно без контекста за 2 секунды</label>
