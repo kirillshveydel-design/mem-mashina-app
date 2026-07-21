@@ -26,7 +26,7 @@
     <button data-tab="video">Видео</button>
     <button data-tab="templates">Шаблоны</button>
     <button data-tab="queue">Очередь</button>
-    <button data-tab="notes">Блокнот</button>
+    <button data-tab="notes">Идеи</button>
   </nav>
 </header>
 
@@ -60,6 +60,17 @@
           <div class="col">
             <label>Нижний текст</label>
             <input type="text" id="bottomText" placeholder="НИЖНИЙ ТЕКСТ">
+          </div>
+          <div class="col">
+            <label>Ниша</label>
+            <div class="row" id="nicheChips">
+              <button data-niche="all" class="active">Все</button>
+              <button data-niche="vayb">Вайбкодинг</button>
+              <button data-niche="net">Нетворкинг</button>
+              <button data-niche="ved">ВЭД</button>
+              <button data-niche="work">Про работу</button>
+            </div>
+            <button class="primary" id="captionRollBtn" style="margin-top:6px;">🎲 Подпись</button>
           </div>
           <div class="row">
             <div class="col">
@@ -144,6 +155,7 @@
         <div class="row">
           <button class="primary" id="addBadgeBtn">+ Новая плашка</button>
           <button id="deleteBadgeBtn">Удалить плашку</button>
+          <button id="pileOnBtn">🎲 Концепция pile-on</button>
         </div>
         <div id="badgeEditor" style="display:none; margin-top:10px;">
           <div class="row">
@@ -241,8 +253,14 @@
       <div id="packGrid" class="grid"></div>
     </div>
 
+    <div class="card" id="lemmyCard" style="display:none;">
+      <h3 style="margin-top:0;">🔥 Свежее (Lemmy, обновляется каждый раз)</h3>
+      <div id="lemmyGrid" class="grid"></div>
+      <div id="lemmyEmpty" class="muted" style="display:none;"></div>
+    </div>
+
     <div class="card" id="imgflipCard" style="display:none;">
-      <h3 style="margin-top:0;">🌐 Из сети (Imgflip)</h3>
+      <h3 style="margin-top:0;">🌐 Зал славы (Imgflip, топ всех времён)</h3>
       <div id="imgflipGrid" class="grid"></div>
       <div id="imgflipEmpty" class="muted" style="display:none;">
         Imgflip недоступен из твоей сети. <button id="ownImageBtn">Загрузить свою картинку</button>
@@ -285,8 +303,15 @@
     </div>
   </section>
 
-  <!-- ===================== БЛОКНОТ ===================== -->
+  <!-- ===================== ИДЕИ ===================== -->
   <section id="tab-notes" style="display:none;">
+    <div class="card">
+      <div class="row">
+        <button class="primary" id="ideaGenBtn">💡 Придумай за меня</button>
+        <span class="muted">Добавит 5 готовых тем одним кликом — жми сколько угодно раз.</span>
+      </div>
+    </div>
+
     <div class="card">
       <div class="row">
         <input type="text" id="noteInput" placeholder="Например: таможня завернула груз из-за запятой в инвойсе" style="flex:1;">
@@ -297,7 +322,7 @@
 
     <div class="card">
       <div class="row" style="justify-content:space-between; align-items:center;">
-        <h3 style="margin:0;">Наблюдения</h3>
+        <h3 style="margin:0;">Идеи</h3>
         <button id="notesExportBtn">Экспорт в текст (буфер)</button>
       </div>
       <div id="notesList" style="margin-top:10px;"></div>
@@ -311,6 +336,7 @@
 
 <script src="app.js"></script>
 <script src="editor.js"></script>
+<script src="captions.js"></script>
 <script src="video.js"></script>
 <script src="templates.js"></script>
 <script src="queue.js"></script>

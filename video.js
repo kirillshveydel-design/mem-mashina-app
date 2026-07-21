@@ -352,6 +352,60 @@
     autosave();
   });
 
+  // --- Готовые концепции «pile-on»: событие + 6 плашек в сетке поверх кадра ---
+  const PILE_ON_BANK = [
+    {
+      event: 'НАПИСАЛ В ТРЕДС, ЧТО ИЩУ ПОДРЯДЧИКА ПО ВЭД',
+      badges: ['Коллега, давай синергию!', 'Мы 10 лет на рынке', 'А Китай рассматриваете?', 'КП в личке!', 'Посмотрите шапку профиля', 'У меня есть знакомый']
+    },
+    {
+      event: 'ОСНОВАТЕЛЬ АНОНСИРОВАЛ РАУНД',
+      badges: ['Saw your post on LinkedIn!', 'Buy our SaaS', 'Мы работаем с такими же', 'Поздравляю! Кстати…', 'Давайте созвон', 'Автоматизируем продажи']
+    },
+    {
+      event: 'НАПИСАЛ, ЧТО СДЕЛАЛ АГЕНТА ЗА ЧАС',
+      badges: ['А продать можно?', 'Сколько стоит?', 'А для моей ниши?', 'Это бот?', 'ЗАБИРАЙТЕ МОИ ДЕНЬГИ', 'А апи есть?']
+    },
+    {
+      event: 'ПОЖАЛОВАЛСЯ, ЧТО НЕТ ВРЕМЕНИ',
+      badges: ['Купи мой курс по тайм-менеджменту', 'Делегируй!', 'Вставай в 5 утра', 'Купи планнер', 'Найми ассистента', 'Просто сфокусируйся']
+    }
+  ];
+
+  const GRID_POSITIONS = [
+    { x: 0.2, y: 0.28 }, { x: 0.5, y: 0.22 }, { x: 0.8, y: 0.28 },
+    { x: 0.2, y: 0.62 }, { x: 0.5, y: 0.68 }, { x: 0.8, y: 0.62 }
+  ];
+
+  document.getElementById('pileOnBtn').addEventListener('click', () => {
+    if (!video.duration) { toast('Сначала загрузи видео'); return; }
+    const concept = PILE_ON_BANK[Math.floor(Math.random() * PILE_ON_BANK.length)];
+    const dur = video.duration;
+
+    state.eventText = concept.event;
+    eventTextInput.value = concept.event;
+
+    state.badges = concept.badges.map((text, i) => {
+      const pos = GRID_POSITIONS[i % GRID_POSITIONS.length];
+      return {
+        id: nextId++,
+        text,
+        fontSize: 22,
+        color: '#ffffff',
+        stroke: '#000000',
+        start: 0,
+        end: dur,
+        keyframes: [{ t: 0, x: pos.x, y: pos.y }, { t: dur, x: pos.x, y: pos.y }],
+        liveOverride: null
+      };
+    });
+
+    selectedId = null;
+    renderAll();
+    autosave();
+    toast('Концепция pile-on применена — подвинь плашки под свой ролик');
+  });
+
   document.getElementById('deleteBadgeBtn').addEventListener('click', () => {
     if (selectedId == null) return;
     state.badges = state.badges.filter(b => b.id !== selectedId);

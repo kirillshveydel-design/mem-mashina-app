@@ -1,4 +1,4 @@
-// Блокнот наблюдений — сырьё для вечерних постов
+// Идеи — сырьё для вечерних постов + генератор тем
 (() => {
   const STORAGE_KEY = 'mm_notes_v1';
   const input = document.getElementById('noteInput');
@@ -6,6 +6,25 @@
   const list = document.getElementById('notesList');
   const exportBtn = document.getElementById('notesExportBtn');
   const empty = document.getElementById('notesEmpty');
+  const ideaGenBtn = document.getElementById('ideaGenBtn');
+
+  const TOPIC_BANK = [
+    'Агент сделал мою работу, пока я выбирал шрифт',
+    'Клиент спросил «а точно агент не наврёт?» — а я не знаю',
+    'Таможня завернула груз из-за запятой в инвойсе',
+    'Написал «давай синергию» — ответили через полгода',
+    'Партнёр пропал после предоплаты',
+    'Попросил агента починить баг — он переписал всё',
+    'Инвестор лайкнул пост, оказался бот',
+    'Срок доставки 14 дней, идёт 47-й',
+    'Сказал маме, что я вайбкодер — она молчит',
+    'Продакшн упал ночью, починил агент, я спал',
+    'На нетворкинге обменялся визитками — никто не пишет',
+    'Курс вырос, маржа испарилась',
+    'Клиент: «что с грузом?» — груз в пути, где — тайна',
+    'Записал цели на год — не узнаю этого человека',
+    'Ревью кода делает агент, я при нём стажёр'
+  ];
 
   function load() {
     try {
@@ -55,6 +74,25 @@
 
   addBtn.addEventListener('click', addNote);
   input.addEventListener('keydown', e => { if (e.key === 'Enter') addNote(); });
+
+  function shuffle(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  ideaGenBtn.addEventListener('click', () => {
+    const picked = shuffle(TOPIC_BANK).slice(0, 5);
+    const notes = load();
+    const now = Date.now();
+    picked.forEach((text, i) => notes.push({ id: now + i + Math.random(), text, ts: now + i }));
+    save(notes);
+    render();
+    toast('Добавлено 5 тем');
+  });
 
   exportBtn.addEventListener('click', async () => {
     const notes = load();

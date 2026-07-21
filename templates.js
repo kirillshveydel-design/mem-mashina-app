@@ -4,6 +4,9 @@
   const imgflipGrid = document.getElementById('imgflipGrid');
   const imgflipCard = document.getElementById('imgflipCard');
   const imgflipEmpty = document.getElementById('imgflipEmpty');
+  const lemmyGrid = document.getElementById('lemmyGrid');
+  const lemmyCard = document.getElementById('lemmyCard');
+  const lemmyEmpty = document.getElementById('lemmyEmpty');
   const statusText = document.getElementById('statusText');
   const ownFileInput = document.getElementById('ownFileInput');
 
@@ -77,7 +80,87 @@
     }
   }
 
+  const IMG_EXT_RE = /\.(jpg|jpeg|png|webp)(\?.*)?$/i;
+
+  async function fetchJsonDirect(url) {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return res.json();
+  }
+
+  async function fetchJsonViaProxy(url) {
+    const proxyUrl = 'https://api.allorigins.win/get?url=' + encodeURIComponent(url);
+    const res = await fetch(proxyUrl);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const wrapper = await res.json();
+    return JSON.parse(wrapper.contents);
+  }
+
+  async function fetchLemmyCommunity(community, limit) {
+    const url = `https://lemmy.world/api/v3/post/list?community_name=${community}&sort=Hot&limit=${limit}`;
+    try {
+      return await fetchJsonDirect(url);
+    } catch (e) {
+      console.warn(`Lemmy c/${community} напрямую недоступен (${e.message}), пробую через allorigins`, e);
+      return await fetchJsonViaProxy(url);
+    }
+  }
+
+  async function loadLemmy() {
+    lemmyCard.style.display = 'block';
+    lemmyGrid.innerHTML = '';
+    lemmyEmpty.style.display = 'none';
+    statusText.textContent = 'Обновляю свежие тренды из Lemmy...';
+
+    const seenUrls = new Set();
+    const items = [];
+    const communityCounts = {};
+
+    for (const community of ['memes', '196']) {
+      try {
+        const data = await fetchLemmyCommunity(community, 40);
+        const posts = data.posts || [];
+        let countForCommunity = 0;
+        for (const p of posts) {
+          const post = p.post || {};
+          const url = post.url && IMG_EXT_RE.test(post.url) ? post.url : null;
+          if (!url || seenUrls.has(url)) continue;
+          seenUrls.add(url);
+          items.push({ name: post.name || '', url });
+          countForCommunity++;
+        }
+        communityCounts[community] = countForCommunity;
+      } catch (e) {
+        console.warn(`Lemmy c/${community} недоступен (даже через allorigins)`, e);
+        communityCounts[community] = 0;
+      }
+    }
+
+    if (!items.length) {
+      lemmyEmpty.style.display = 'block';
+      lemmyEmpty.textContent = 'Lemmy сейчас недоступен (ни напрямую, ни через прокси) — показываю офлайн-пак и зал славы Imgflip.';
+      statusText.textContent = 'Свежие тренды не загрузились.';
+      return { total: 0, communityCounts };
+    }
+
+    items.forEach(it => {
+      const div = document.createElement('div');
+      div.className = 'tpl';
+      div.innerHTML = `<img src="${it.url}" loading="lazy" alt="${it.name}"><div class="name">${it.name}</div>`;
+      div.addEventListener('click', async () => {
+        statusText.textContent = 'Открываю шаблон…';
+        const dataUrl = await toDataURL(it.url);
+        openInEditor(dataUrl);
+      });
+      lemmyGrid.appendChild(div);
+    });
+
+    statusText.textContent = `Свежих шаблонов: ${items.length} (c/memes: ${communityCounts.memes}, c/196: ${communityCounts['196']})`;
+    return { total: items.length, communityCounts };
+  }
+
   document.getElementById('refreshBtn').addEventListener('click', () => {
+    loadLemmy();
     loadImgflip();
   });
 
