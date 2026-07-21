@@ -325,6 +325,14 @@ header.topbar nav [data-tab].active {
 }
 .bank-status { font-size: 12px; color: var(--muted); margin-top: 6px; }
 
+/* --- Список независимых подписей в фоторедакторе --- */
+#captionList button.active {
+  background: var(--accent);
+  color: var(--accent-text);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
 /* --- Кнопка выхода из редактора (крестик в углу) --- */
 .editor-close-btn {
   position: absolute;

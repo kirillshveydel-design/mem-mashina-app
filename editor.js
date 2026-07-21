@@ -7,11 +7,6 @@
   const canvas = document.getElementById('canvas');
   const ctx = canvas.getContext('2d');
 
-  const topTextInput = document.getElementById('topText');
-  const bottomTextInput = document.getElementById('bottomText');
-  const fontSizeInput = document.getElementById('fontSize');
-  const fontColorInput = document.getElementById('fontColor');
-  const strokeColorInput = document.getElementById('strokeColor');
   const capsToggle = document.getElementById('capsToggle');
   const plateToggle = document.getElementById('plateToggle');
   const plateColorInput = document.getElementById('plateColor');
@@ -21,14 +16,121 @@
   let cropMode = null; // null | 'square' | 'portrait'
   const MAX_DIM = 1600;
 
-  const state = {
-    textPos: {
-      top: { x: 0.5, y: 0.08 },
-      bottom: { x: 0.5, y: 0.90 }
-    }
-  };
+  // --- Подписи: неограниченный список независимых надписей ---
+  let captions = []; // {id, text, x, y, fontSize, color, stroke, caps, plate, plateColor}
+  let selectedCaptionId = null;
+  let nextCaptionId = 1;
 
-  function loadImageFromSource(src) {
+  const captionListEl = document.getElementById('captionList');
+  const captionEditorEl = document.getElementById('captionEditor');
+  const captionTextInput = document.getElementById('captionTextInput');
+  const captionFontSize = document.getElementById('captionFontSize');
+  const captionColor = document.getElementById('captionColor');
+  const captionStroke = document.getElementById('captionStroke');
+  const captionCaps = document.getElementById('captionCaps');
+  const captionPlate = document.getElementById('captionPlate');
+  const captionPlateColor = document.getElementById('captionPlateColor');
+
+  function getSelectedCaption() {
+    return captions.find(c => c.id === selectedCaptionId) || null;
+  }
+
+  function newCaption(text, x, y) {
+    return {
+      id: nextCaptionId++,
+      text: text || 'НОВАЯ ПОДПИСЬ',
+      x: x != null ? x : 0.5,
+      y: y != null ? y : Math.min(0.85, 0.15 + captions.length * 0.12),
+      fontSize: 46,
+      color: '#ffffff',
+      stroke: '#000000',
+      caps: true,
+      plate: false,
+      plateColor: '#ffffff'
+    };
+  }
+
+  function selectCaption(id) {
+    selectedCaptionId = id;
+    syncCaptionEditor();
+    renderCaptionList();
+    render();
+  }
+
+  function addCaption(text, x, y) {
+    const cap = newCaption(text, x, y);
+    captions.push(cap);
+    selectCaption(cap.id);
+    return cap;
+  }
+
+  // Используется генератором пар (🎲 Подпись / режим «Событие») — добавляет сразу два новых
+  // независимых текста, не трогая уже существующие подписи на картинке.
+  function addCaptionPair(top, bottom) {
+    addCaption(top, 0.5, Math.min(0.85, 0.15 + captions.length * 0.12));
+    addCaption(bottom, 0.5, Math.min(0.9, 0.15 + captions.length * 0.12));
+  }
+
+  function deleteCaption(id) {
+    captions = captions.filter(c => c.id !== id);
+    if (selectedCaptionId === id) selectedCaptionId = null;
+    syncCaptionEditor();
+    renderCaptionList();
+    render();
+  }
+
+  function renderCaptionList() {
+    captionListEl.innerHTML = '';
+    if (!captions.length) {
+      captionListEl.innerHTML = '<span class="muted">Подписей пока нет — жми «+ Добавить подпись» или 🎲</span>';
+      return;
+    }
+    captions.forEach(cap => {
+      const chip = document.createElement('button');
+      chip.textContent = (cap.text || '(пусто)').slice(0, 18) + (cap.text.length > 18 ? '…' : '');
+      chip.className = cap.id === selectedCaptionId ? 'active' : '';
+      chip.addEventListener('click', () => selectCaption(cap.id));
+      captionListEl.appendChild(chip);
+    });
+  }
+
+  function syncCaptionEditor() {
+    const cap = getSelectedCaption();
+    if (!cap) { captionEditorEl.style.display = 'none'; return; }
+    captionEditorEl.style.display = 'block';
+    captionTextInput.value = cap.text;
+    captionFontSize.value = cap.fontSize;
+    captionColor.value = cap.color;
+    captionStroke.value = cap.stroke;
+    captionCaps.checked = cap.caps;
+    captionPlate.checked = cap.plate;
+    captionPlateColor.value = cap.plateColor;
+  }
+
+  document.getElementById('addCaptionBtn').addEventListener('click', () => addCaption(''));
+  document.getElementById('deleteCaptionBtn').addEventListener('click', () => {
+    if (selectedCaptionId != null) deleteCaption(selectedCaptionId);
+  });
+
+  [
+    [captionTextInput, 'text', el => el.value],
+    [captionFontSize, 'fontSize', el => Number(el.value)],
+    [captionColor, 'color', el => el.value],
+    [captionStroke, 'stroke', el => el.value],
+    [captionCaps, 'caps', el => el.checked],
+    [captionPlate, 'plate', el => el.checked],
+    [captionPlateColor, 'plateColor', el => el.value]
+  ].forEach(([el, prop, getVal]) => {
+    el.addEventListener('input', () => {
+      const cap = getSelectedCaption();
+      if (!cap) return;
+      cap[prop] = getVal(el);
+      if (prop === 'text') renderCaptionList();
+      render();
+    });
+  });
+
+  function loadImageFromSource(src, onLoaded) {
     const image = new Image();
     image.onload = () => {
       img = image;
@@ -37,8 +139,13 @@
       stripTop = 0;
       stripBottom = 0;
       stripPanel.style.display = 'none';
+      captions = [];
+      selectedCaptionId = null;
       dropcard.style.display = 'none';
       editorCard.style.display = 'block';
+      if (onLoaded) onLoaded();
+      renderCaptionList();
+      syncCaptionEditor();
       render();
     };
     image.onerror = () => toast('Не удалось загрузить картинку');
@@ -254,40 +361,38 @@
     return lines;
   }
 
-  function drawTextBlock(rawText, xPct, yPct) {
-    if (!rawText) return null;
-    const text = capsToggle.checked ? rawText.toUpperCase() : rawText;
-    const fontPx = Math.round(Number(fontSizeInput.value) * (canvas.width / 700));
+  function drawCaption(cap) {
+    if (!cap.text) return null;
+    const text = cap.caps ? cap.text.toUpperCase() : cap.text;
+    const fontPx = Math.round(Number(cap.fontSize) * (canvas.width / 700));
     const maxWidth = canvas.width * 0.92;
     const lines = wrapLines(text, maxWidth, fontPx);
     const lineHeight = fontPx * 1.15;
     const blockHeight = lineHeight * lines.length;
-    const cx = xPct * canvas.width;
-    const cy = yPct * canvas.height;
+    const cx = cap.x * canvas.width;
+    const cy = cap.y * canvas.height;
     const startY = cy - blockHeight / 2 + lineHeight / 2;
 
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.font = `bold ${fontPx}px Impact, "Arial Black", sans-serif`;
 
-    // Замеряем ширину строк заранее — нужно знать габариты блока ДО того,
-    // как рисовать подложку (если она включена — перекрывает всё, что было под текстом).
     let maxLineWidth = 0;
     lines.forEach(line => { maxLineWidth = Math.max(maxLineWidth, ctx.measureText(line).width); });
 
-    if (plateToggle.checked) {
+    if (cap.plate) {
       const padX = fontPx * 0.35, padY = fontPx * 0.25;
       const plateW = maxLineWidth + padX * 2;
       const plateH = blockHeight + padY * 2;
-      ctx.fillStyle = plateColorInput.value;
+      ctx.fillStyle = cap.plateColor;
       ctx.fillRect(cx - plateW / 2, cy - plateH / 2, plateW, plateH);
     }
 
     ctx.lineJoin = 'round';
     ctx.miterLimit = 2;
-    ctx.strokeStyle = strokeColorInput.value;
+    ctx.strokeStyle = cap.stroke;
     ctx.lineWidth = Math.max(2, fontPx * 0.09);
-    ctx.fillStyle = fontColorInput.value;
+    ctx.fillStyle = cap.color;
 
     lines.forEach((line, i) => {
       const y = startY + i * lineHeight;
@@ -295,10 +400,20 @@
       ctx.fillText(line, cx, y);
     });
 
-    return { cx, cy, halfW: maxLineWidth / 2, halfH: blockHeight / 2 };
+    if (cap.id === selectedCaptionId) {
+      ctx.save();
+      ctx.strokeStyle = '#ffcd00';
+      ctx.setLineDash([6, 4]);
+      ctx.lineWidth = 2;
+      const pad = 8;
+      ctx.strokeRect(cx - maxLineWidth / 2 - pad, cy - blockHeight / 2 - pad, maxLineWidth + pad * 2, blockHeight + pad * 2);
+      ctx.restore();
+    }
+
+    return { id: cap.id, cx, cy, halfW: maxLineWidth / 2, halfH: blockHeight / 2 };
   }
 
-  let hitBoxes = { top: null, bottom: null };
+  let hitBoxes = [];
 
   function render() {
     if (!img) return;
@@ -311,15 +426,11 @@
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(img, rect.sx, rect.sy, rect.sw, rect.sh, 0, 0, canvas.width, canvas.height);
 
-    hitBoxes.top = drawTextBlock(topTextInput.value, state.textPos.top.x, state.textPos.top.y);
-    hitBoxes.bottom = drawTextBlock(bottomTextInput.value, state.textPos.bottom.x, state.textPos.bottom.y);
+    hitBoxes = captions.map(cap => drawCaption(cap)).filter(Boolean);
   }
 
-  [topTextInput, bottomTextInput, fontSizeInput, fontColorInput, strokeColorInput, capsToggle, plateToggle, plateColorInput]
-    .forEach(el => el.addEventListener('input', render));
-
   // --- Перетаскивание подписей ---
-  let dragging = null; // 'top' | 'bottom' | null
+  let dragging = null; // id перетаскиваемой подписи или null
 
   function canvasPointFromEvent(e) {
     const r = canvas.getBoundingClientRect();
@@ -332,12 +443,11 @@
   }
 
   function hitTest(pt) {
-    for (const key of ['top', 'bottom']) {
-      const b = hitBoxes[key];
-      if (!b) continue;
+    for (let i = hitBoxes.length - 1; i >= 0; i--) {
+      const b = hitBoxes[i];
       const pad = 14;
       if (Math.abs(pt.x - b.cx) <= b.halfW + pad && Math.abs(pt.y - b.cy) <= b.halfH + pad) {
-        return key;
+        return b.id;
       }
     }
     return null;
@@ -346,18 +456,22 @@
   canvas.addEventListener('pointerdown', e => {
     if (!img) return;
     const pt = canvasPointFromEvent(e);
-    dragging = hitTest(pt);
-    if (dragging) {
+    const hitId = hitTest(pt);
+    if (hitId != null) {
+      dragging = hitId;
+      if (hitId !== selectedCaptionId) selectCaption(hitId);
       canvas.setPointerCapture(e.pointerId);
       canvas.style.cursor = 'grabbing';
     }
   });
 
   canvas.addEventListener('pointermove', e => {
-    if (!dragging) return;
+    if (dragging == null) return;
+    const cap = captions.find(c => c.id === dragging);
+    if (!cap) return;
     const pt = canvasPointFromEvent(e);
-    state.textPos[dragging].x = Math.min(1, Math.max(0, pt.x / canvas.width));
-    state.textPos[dragging].y = Math.min(1, Math.max(0, pt.y / canvas.height));
+    cap.x = Math.min(1, Math.max(0, pt.x / canvas.width));
+    cap.y = Math.min(1, Math.max(0, pt.y / canvas.height));
     render();
   });
 
@@ -382,9 +496,10 @@
     stripTop = 0;
     stripBottom = 0;
     stripPanel.style.display = 'none';
-    topTextInput.value = '';
-    bottomTextInput.value = '';
-    state.textPos = { top: { x: 0.5, y: 0.08 }, bottom: { x: 0.5, y: 0.90 } };
+    captions = [];
+    selectedCaptionId = null;
+    renderCaptionList();
+    syncCaptionEditor();
     editorCard.style.display = 'none';
     dropcard.style.display = 'block';
     fileInput.value = '';
@@ -395,14 +510,21 @@
 
   // --- Загрузка трофея (структура + картинка) — вызывается из вкладки «Очередь» ---
   function loadTrophy(t) {
-    loadImageFromSource(t.imageDataUrl);
-    topTextInput.value = t.top || '';
-    bottomTextInput.value = t.bottom || '';
-    fontSizeInput.value = t.fontSize || 46;
-    fontColorInput.value = t.color || '#ffffff';
-    strokeColorInput.value = t.stroke || '#000000';
-    capsToggle.checked = t.caps !== false;
-    if (t.textPos) state.textPos = t.textPos;
+    loadImageFromSource(t.imageDataUrl, () => {
+      if (t.captions && t.captions.length) {
+        captions = t.captions.map(c => ({ ...c, id: nextCaptionId++ }));
+      } else if (t.top || t.bottom) {
+        // Совместимость со старыми трофеями (единая пара верх/низ).
+        if (t.top) captions.push(newCaption(t.top, (t.textPos && t.textPos.top && t.textPos.top.x) || 0.5, (t.textPos && t.textPos.top && t.textPos.top.y) || 0.08));
+        if (t.bottom) captions.push(newCaption(t.bottom, (t.textPos && t.textPos.bottom && t.textPos.bottom.x) || 0.5, (t.textPos && t.textPos.bottom && t.textPos.bottom.y) || 0.9));
+        captions.forEach(c => {
+          c.fontSize = t.fontSize || 46;
+          c.color = t.color || '#ffffff';
+          c.stroke = t.stroke || '#000000';
+          c.caps = t.caps !== false;
+        });
+      }
+    });
     toast('Трофей загружен в редактор');
   }
 
@@ -420,7 +542,10 @@
       await mmAdd('queue', {
         kind: 'photo', blob, mime: 'image/png',
         plannedDate, slot, topic, createdAt: Date.now(),
-        topText: topTextInput.value, bottomText: bottomTextInput.value, niche,
+        // Для дедупа в published-log достаточно первых двух подписей (историческая пара верх/низ).
+        topText: captions[0] ? captions[0].text : '',
+        bottomText: captions[1] ? captions[1].text : '',
+        niche,
         published: false
       });
       toast('Добавлено в очередь постов');
@@ -432,18 +557,14 @@
     await mmAdd('trophies', {
       kind: 'photo',
       imageDataUrl: origSrc,
-      top: topTextInput.value,
-      bottom: bottomTextInput.value,
-      fontSize: Number(fontSizeInput.value),
-      color: fontColorInput.value,
-      stroke: strokeColorInput.value,
-      caps: capsToggle.checked,
-      textPos: state.textPos,
+      captions: captions.map(({ id, ...rest }) => rest),
       createdAt: Date.now()
     });
     toast('Сохранено в Трофеи');
   });
 
-  // Экспонируем для межтабового моста (templates.js/queue.js) и программных тестов
-  window.__memMachine = { loadImageFromSource, loadTrophy, render, canvas };
+  renderCaptionList();
+
+  // Экспонируем для межтабового моста (templates.js/queue.js/captions.js) и программных тестов
+  window.__memMachine = { loadImageFromSource, loadTrophy, addCaption, addCaptionPair, render, canvas };
 })();

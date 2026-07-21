@@ -55,12 +55,11 @@
         </div>
         <div style="flex: 1 1 260px; min-width:240px;" class="col">
           <div class="col">
-            <label>Верхний текст</label>
-            <input type="text" id="topText" placeholder="ВЕРХНИЙ ТЕКСТ">
-          </div>
-          <div class="col">
-            <label>Нижний текст</label>
-            <input type="text" id="bottomText" placeholder="НИЖНИЙ ТЕКСТ">
+            <div class="row" style="justify-content:space-between; align-items:center;">
+              <label style="margin:0;">Подписи</label>
+              <button id="addCaptionBtn">+ Добавить подпись</button>
+            </div>
+            <div id="captionList" class="row" style="margin:4px 0;"></div>
           </div>
           <div class="col">
             <label>Ниша</label>
@@ -80,32 +79,35 @@
               <div id="eventResults" style="margin-top:8px;"></div>
             </div>
           </div>
-          <div class="row">
-            <div class="col">
-              <label>Размер шрифта</label>
-              <input type="range" id="fontSize" min="12" max="140" value="46">
+          <div class="col" id="captionEditor" style="display:none; border:1px solid var(--border); border-radius:8px; padding:8px;">
+            <label>Текст выбранной подписи</label>
+            <input type="text" id="captionTextInput" placeholder="ТЕКСТ">
+            <div class="row">
+              <div class="col">
+                <label>Размер шрифта</label>
+                <input type="range" id="captionFontSize" min="12" max="140" value="46">
+              </div>
+              <div class="col">
+                <label>Цвет</label>
+                <input type="color" id="captionColor" value="#ffffff">
+              </div>
+              <div class="col">
+                <label>Обводка</label>
+                <input type="color" id="captionStroke" value="#000000">
+              </div>
             </div>
-            <div class="col">
-              <label>Цвет</label>
-              <input type="color" id="fontColor" value="#ffffff">
+            <div class="row">
+              <label style="display:flex; align-items:center; gap:6px; margin:0;">
+                <input type="checkbox" id="captionCaps" checked style="width:auto;"> CAPS
+              </label>
+              <label style="display:flex; align-items:center; gap:6px; margin:0;">
+                <input type="checkbox" id="captionPlate" style="width:auto;"> Подложка
+              </label>
+              <input type="color" id="captionPlateColor" value="#ffffff">
             </div>
-            <div class="col">
-              <label>Обводка</label>
-              <input type="color" id="strokeColor" value="#000000">
-            </div>
+            <div class="muted" style="margin-top:-4px;">Подложка перекрывает то, что было под текстом (например, чужую надпись по центру фото).</div>
+            <button id="deleteCaptionBtn" style="margin-top:4px;">Удалить эту подпись</button>
           </div>
-          <div class="row">
-            <label style="display:flex; align-items:center; gap:6px; margin:0;">
-              <input type="checkbox" id="capsToggle" checked style="width:auto;"> CAPS
-            </label>
-          </div>
-          <div class="row">
-            <label style="display:flex; align-items:center; gap:6px; margin:0;">
-              <input type="checkbox" id="plateToggle" style="width:auto;"> Подложка под текст
-            </label>
-            <input type="color" id="plateColor" value="#ffffff">
-          </div>
-          <div class="muted" style="margin-top:-4px;">Перекрывает то, что было под текстом (например, чужую надпись по центру фото) — двигай подпись куда нужно, подложка едет вместе с ней.</div>
           <div class="col">
             <label>Кадрирование</label>
             <div class="row">

@@ -136,12 +136,7 @@
     const pair = nextPair(currentNiche);
     if (!pair) { toast('В этой нише все пары уже опубликованы — добавь свои в следующем обновлении банка'); return; }
     const [top, bottom] = pair;
-    const topInput = document.getElementById('topText');
-    const bottomInput = document.getElementById('bottomText');
-    topInput.value = top;
-    bottomInput.value = bottom;
-    topInput.dispatchEvent(new Event('input'));
-    bottomInput.dispatchEvent(new Event('input'));
+    window.__memMachine.addCaptionPair(top, bottom);
   });
 
   // --- Режим «⚡ Событие» — механическая заготовка из 3 шаблонов, без внешних вызовов ---
@@ -183,12 +178,7 @@
         <div style="font-size:13px; color:var(--muted);">${d.bottom}</div>
         <button style="margin-top:6px;">Использовать</button>`;
       row.querySelector('button').addEventListener('click', () => {
-        const topInput = document.getElementById('topText');
-        const bottomInput = document.getElementById('bottomText');
-        topInput.value = d.top;
-        bottomInput.value = d.bottom;
-        topInput.dispatchEvent(new Event('input'));
-        bottomInput.dispatchEvent(new Event('input'));
+        window.__memMachine.addCaptionPair(d.top, d.bottom);
         toast('Черновик подставлен — доводи руками');
       });
       container.appendChild(row);

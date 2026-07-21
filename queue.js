@@ -212,7 +212,7 @@
           <img class="thumb" src="${item.imageDataUrl}">
           <div class="info">
             <div class="title">🖼️ Фото-трофей</div>
-            <div class="muted">${item.top || ''} / ${item.bottom || ''}</div>
+            <div class="muted">${item.captions ? item.captions.map(c => c.text).filter(Boolean).join(' / ') : `${item.top || ''} / ${item.bottom || ''}`}</div>
           </div>
           <div class="row">
             <button class="useBtn">Открыть в редакторе</button>
