@@ -297,3 +297,20 @@ header.topbar nav [data-tab].active {
 }
 .note-row .note-text { flex: 1; }
 .note-row .note-date { font-size: 12px; white-space: nowrap; }
+
+/* --- Редакторский чек-лист перед скачиванием --- */
+.editor-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 8px 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.editor-checklist label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.editor-checklist input[type="checkbox"] { width: auto; }

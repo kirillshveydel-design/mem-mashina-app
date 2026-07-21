@@ -69,8 +69,15 @@
               <button data-niche="net">Нетворкинг</button>
               <button data-niche="ved">ВЭД</button>
               <button data-niche="work">Про работу</button>
+              <button data-niche="event">⚡ Событие</button>
             </div>
             <button class="primary" id="captionRollBtn" style="margin-top:6px;">🎲 Подпись</button>
+            <div id="eventModePanel" style="display:none; margin-top:6px;">
+              <label>Что произошло, одной фразой</label>
+              <input type="text" id="eventInput" placeholder="Инфантино вручил Трампу медаль ФИФА">
+              <button class="primary" id="eventRollBtn" style="margin-top:6px;">Собрать 3 варианта</button>
+              <div id="eventResults" style="margin-top:8px;"></div>
+            </div>
           </div>
           <div class="row">
             <div class="col">
@@ -100,6 +107,11 @@
             </div>
           </div>
           <div class="muted">Подсказка: перетаскивай подписи прямо на картинке мышкой или пальцем.</div>
+          <div class="editor-checklist" id="photoChecklist">
+            <label><input type="checkbox" class="chk"> Понятно без контекста за 2 секунды</label>
+            <label><input type="checkbox" class="chk"> Ирония направлена на себя, не вниз на кого-то другого</label>
+            <label><input type="checkbox" class="chk"> Ровно один панчлайн, не два</label>
+          </div>
           <div class="row" style="margin-top:8px;">
             <button class="primary" id="exportBtn">Скачать PNG</button>
             <button id="queueBtn">В очередь постов</button>
@@ -221,6 +233,11 @@
       </div>
 
       <div class="card">
+        <div class="editor-checklist" id="videoChecklist">
+          <label><input type="checkbox" class="chk"> Понятно без контекста за 2 секунды</label>
+          <label><input type="checkbox" class="chk"> Ирония направлена на себя, не вниз на кого-то другого</label>
+          <label><input type="checkbox" class="chk"> Ровно один панчлайн, не два</label>
+        </div>
         <div class="row">
           <button class="primary" id="exportWebmBtn">Скачать WebM</button>
           <button id="exportMp4Btn">Скачать MP4</button>
@@ -284,6 +301,14 @@
 
     <div class="card">
       <div class="row" style="justify-content:space-between; align-items:center;">
+        <div class="muted">Опубликовано всего: <b id="publishedCount">0</b></div>
+        <button id="showHistoryBtn">Показать историю</button>
+      </div>
+      <div id="publishedHistoryPanel" style="display:none; margin-top:10px; max-height:240px; overflow-y:auto;"></div>
+    </div>
+
+    <div class="card">
+      <div class="row" style="justify-content:space-between; align-items:center;">
         <h3 style="margin:0;">Черновики в очереди</h3>
         <select id="sortSelect">
           <option value="date-asc">Сначала ближайшие</option>
@@ -335,6 +360,7 @@
 <div class="toast" id="toast" style="display:none;"></div>
 
 <script src="app.js"></script>
+<script src="published-log.js"></script>
 <script src="editor.js"></script>
 <script src="captions.js"></script>
 <script src="video.js"></script>

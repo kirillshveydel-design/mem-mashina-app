@@ -239,6 +239,7 @@
     link.href = canvas.toDataURL('image/png');
     link.click();
     toast('PNG скачан');
+    document.querySelectorAll('#photoChecklist .chk').forEach(c => c.checked = false);
   });
 
   document.getElementById('resetBtn').addEventListener('click', () => {
@@ -272,11 +273,15 @@
     if (plannedDate === null) return;
     const slot = prompt('Слот: утро или вечер?', 'утро') || 'утро';
     const topic = prompt('Тема (для памяти):', '') || '';
+    const activeChip = document.querySelector('#nicheChips .active');
+    const niche = activeChip ? activeChip.dataset.niche : 'all';
     canvas.toBlob(async blob => {
       if (!blob) { toast('Не удалось собрать PNG'); return; }
       await mmAdd('queue', {
         kind: 'photo', blob, mime: 'image/png',
-        plannedDate, slot, topic, createdAt: Date.now()
+        plannedDate, slot, topic, createdAt: Date.now(),
+        topText: topTextInput.value, bottomText: bottomTextInput.value, niche,
+        published: false
       });
       toast('Добавлено в очередь постов');
     }, 'image/png');

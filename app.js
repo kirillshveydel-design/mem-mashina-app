@@ -180,6 +180,16 @@ async function mmGetAll(storeName) {
   });
 }
 
+async function mmPut(storeName, entry) {
+  const db = await mmOpenDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, 'readwrite');
+    const req = tx.objectStore(storeName).put(entry);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
 async function mmDelete(storeName, id) {
   const db = await mmOpenDB();
   return new Promise((resolve, reject) => {

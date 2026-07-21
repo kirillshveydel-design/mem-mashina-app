@@ -379,7 +379,9 @@
 
   document.getElementById('pileOnBtn').addEventListener('click', () => {
     if (!video.duration) { toast('Сначала загрузи видео'); return; }
-    const concept = PILE_ON_BANK[Math.floor(Math.random() * PILE_ON_BANK.length)];
+    const available = PILE_ON_BANK.filter(c => !mmPublishedHasPileon(c.event));
+    if (!available.length) { toast('Все концепции pile-on уже опубликованы'); return; }
+    const concept = available[Math.floor(Math.random() * available.length)];
     const dur = video.duration;
 
     state.eventText = concept.event;
@@ -711,7 +713,9 @@
       const topic = prompt('Тема (для памяти):', '') || '';
       await mmAdd('queue', {
         kind: 'video', blob: webmBlob, mime: 'video/webm',
-        plannedDate, slot, topic, createdAt: Date.now()
+        plannedDate, slot, topic, createdAt: Date.now(),
+        eventText: state.eventText, badgeTexts: state.badges.map(b => b.text),
+        published: false
       });
       exportStatus.textContent = 'Добавлено в очередь постов (WebM).';
       toast('Добавлено в очередь постов');
@@ -723,6 +727,7 @@
     link.download = filename;
     link.href = URL.createObjectURL(blob);
     link.click();
+    document.querySelectorAll('#videoChecklist .chk').forEach(c => c.checked = false);
   }
 
   let ffmpegInstance = null;

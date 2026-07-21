@@ -53,7 +53,14 @@
       row.innerHTML = `
         <div class="note-text">${n.text}</div>
         <div class="note-date muted">${fmtDate(n.ts)}</div>
+        <button class="note-publish" title="Отметить опубликованной — больше не предлагать">✅</button>
         <button class="note-del">✕</button>`;
+      row.querySelector('.note-publish').addEventListener('click', () => {
+        mmPublishedAdd({ type: 'topic', text: n.text });
+        save(load().filter(x => x.id !== n.id));
+        render();
+        toast('Тема отмечена опубликованной — не предложится снова');
+      });
       row.querySelector('.note-del').addEventListener('click', () => {
         save(load().filter(x => x.id !== n.id));
         render();
@@ -85,13 +92,15 @@
   }
 
   ideaGenBtn.addEventListener('click', () => {
-    const picked = shuffle(TOPIC_BANK).slice(0, 5);
+    const available = TOPIC_BANK.filter(text => !mmPublishedHasTopic(text));
+    if (!available.length) { toast('Все темы банка уже опубликованы'); return; }
+    const picked = shuffle(available).slice(0, 5);
     const notes = load();
     const now = Date.now();
     picked.forEach((text, i) => notes.push({ id: now + i + Math.random(), text, ts: now + i }));
     save(notes);
     render();
-    toast('Добавлено 5 тем');
+    toast(`Добавлено ${picked.length} тем`);
   });
 
   exportBtn.addEventListener('click', async () => {

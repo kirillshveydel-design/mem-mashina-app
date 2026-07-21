@@ -28,9 +28,12 @@
     queueList.innerHTML = '';
     queueEmpty.style.display = items.length ? 'none' : 'block';
 
-    const n = items.length;
+    const unpublished = items.filter(it => !it.published);
+    const n = unpublished.length;
     ammoCount.textContent = `${n}/6`;
     ammoCount.className = 'ammo ' + (n >= 6 ? 'ok' : (n <= 2 ? 'low' : ''));
+
+    document.getElementById('publishedCount').textContent = mmPublishedCount();
 
     items.forEach(item => {
       const url = URL.createObjectURL(item.blob);
@@ -43,11 +46,12 @@
       div.innerHTML = `
         ${thumbHtml}
         <div class="info">
-          <div class="title">${item.kind === 'photo' ? '🖼️ Фото' : '🎬 Видео'} — ${fmtDate(item.plannedDate)} (${item.slot || '—'})</div>
+          <div class="title">${item.published ? '✅ ' : ''}${item.kind === 'photo' ? '🖼️ Фото' : '🎬 Видео'} — ${fmtDate(item.plannedDate)} (${item.slot || '—'})</div>
           <div class="muted">${item.topic || ''}</div>
         </div>
         <div class="row">
           <button class="dlBtn">Скачать</button>
+          ${item.published ? '' : '<button class="publishBtn">✅ Опубликовано</button>'}
           <button class="delBtn">Удалить</button>
         </div>`;
       div.querySelector('.dlBtn').addEventListener('click', () => {
@@ -56,6 +60,25 @@
         a.download = 'mem-' + item.id + (item.kind === 'photo' ? '.png' : '.webm');
         a.click();
       });
+      const publishBtn = div.querySelector('.publishBtn');
+      if (publishBtn) {
+        publishBtn.addEventListener('click', async () => {
+          if (item.kind === 'photo' && (item.topText || item.bottomText)) {
+            mmPublishedAdd({
+              type: 'caption',
+              text_top: item.topText || '',
+              text_bottom: item.bottomText || '',
+              niche: item.niche || 'all'
+            });
+          } else if (item.kind === 'video' && item.eventText) {
+            mmPublishedAdd({ type: 'pileon', text: item.eventText });
+          }
+          item.published = true;
+          await mmPut('queue', item);
+          toast('Отмечено как опубликовано');
+          loadQueue();
+        });
+      }
       div.querySelector('.delBtn').addEventListener('click', async () => {
         await mmDelete('queue', item.id);
         loadQueue();
@@ -63,6 +86,21 @@
       queueList.appendChild(div);
     });
   }
+
+  document.getElementById('showHistoryBtn').addEventListener('click', () => {
+    const panel = document.getElementById('publishedHistoryPanel');
+    const isHidden = panel.style.display === 'none';
+    if (isHidden) {
+      const entries = mmPublishedAll().slice().reverse();
+      panel.innerHTML = entries.length
+        ? entries.map(e => {
+            const label = e.type === 'caption' ? `${e.text_top} / ${e.text_bottom}` : (e.text || '');
+            return `<div class="muted" style="padding:4px 0; border-bottom:1px solid var(--border);">${e.date_published} — ${label}</div>`;
+          }).join('')
+        : '<div class="muted">Пока ничего не опубликовано.</div>';
+    }
+    panel.style.display = isHidden ? 'block' : 'none';
+  });
 
   async function loadTrophies() {
     const items = await mmGetAll('trophies');
