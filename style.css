@@ -341,6 +341,14 @@ header.topbar nav [data-tab].active {
   border-color: var(--danger);
 }
 
+/* --- Кнопка автопоиска текста, пока показаны найденные кандидаты --- */
+#scanTextBtn.active {
+  background: #4ade80;
+  color: #111214;
+  border-color: #4ade80;
+  font-weight: 600;
+}
+
 /* --- Кнопка выхода из редактора (крестик в углу) --- */
 .editor-close-btn {
   position: absolute;

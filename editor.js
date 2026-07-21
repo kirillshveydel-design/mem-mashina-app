@@ -142,13 +142,19 @@
   let draggingPatchOffset = null; // {dx, dy} — смещение точки захвата от левого верхнего угла
   let resizingPatch = null; // {id, corner}
   let patchBoxes = []; // [{id,x,y,w,h}] в пикселях canvas — обновляется в render()
+  let livePreviewId = null; // id патча, который сейчас активно тащат/ресайзят — на время жеста рисуем дешёвый цвет вместо тяжёлого инпейнтинга
+  let scanCandidates = []; // [{x,y,w,h}] доли canvas — найденные автопоиском текстовые блоки, ещё не подтверждённые
+  let scanMode = false;
 
   const patchModeBtn = document.getElementById('patchModeBtn');
   const patchModeHint = document.getElementById('patchModeHint');
+  const scanTextBtn = document.getElementById('scanTextBtn');
+  const scanHint = document.getElementById('scanHint');
   const patchListEl = document.getElementById('patchList');
   const patchEditorEl = document.getElementById('patchEditor');
   const patchFillColor = document.getElementById('patchFillColor');
   const patchEyedropBtn = document.getElementById('patchEyedropBtn');
+  const patchSmartFillBtn = document.getElementById('patchSmartFillBtn');
   const patchRadius = document.getElementById('patchRadius');
   const patchTextInput = document.getElementById('patchTextInput');
   const patchFontScale = document.getElementById('patchFontScale');
@@ -160,14 +166,37 @@
     return patches.find(p => p.id === selectedPatchId) || null;
   }
 
+  function setScanMode(on) {
+    scanMode = on;
+    if (!on) scanCandidates = [];
+    scanTextBtn.classList.toggle('active', on);
+    scanHint.style.display = on && scanCandidates.length ? 'block' : 'none';
+  }
+
   function setPatchMode(on) {
     patchMode = on;
+    if (on) setScanMode(false);
     patchModeBtn.classList.toggle('active', on);
     patchModeHint.style.display = on ? 'block' : 'none';
     canvas.style.cursor = on ? 'crosshair' : 'grab';
   }
 
   patchModeBtn.addEventListener('click', () => setPatchMode(!patchMode));
+
+  scanTextBtn.addEventListener('click', () => {
+    if (!img) return;
+    setPatchMode(false);
+    const found = detectTextRegions();
+    scanCandidates = found;
+    setScanMode(found.length > 0);
+    if (!found.length) {
+      toast('Не нашли явных текстовых блоков — попробуй выделить вручную кнопкой «Замазать текст»');
+    } else {
+      scanHint.style.display = 'block';
+      toast('Нашли ' + found.length + ' — кликни по рамке на картинке, чтобы замазать её');
+    }
+    render();
+  });
 
   function selectPatch(id) {
     selectedPatchId = id;
@@ -208,10 +237,10 @@
     patchTextColor.value = p.textColor;
     patchStrokeColor.value = p.strokeColor;
     patchCaps.checked = p.caps;
+    patchSmartFillBtn.style.display = p.manualColor ? 'inline-block' : 'none';
   }
 
   [
-    [patchFillColor, 'fillColor', el => el.value],
     [patchRadius, 'radius', el => Number(el.value)],
     [patchTextInput, 'text', el => el.value],
     [patchFontScale, 'fontScale', el => Number(el.value) / 100],
@@ -226,6 +255,26 @@
       if (prop === 'text') renderPatchList();
       render();
     });
+  });
+
+  // Выбор цвета вручную (или пипетка) означает «хочу сам решать чем заливать» —
+  // переключаем патч в ручной режим, автоматическая умная заливка перестаёт его трогать.
+  patchFillColor.addEventListener('input', () => {
+    const p = getSelectedPatch();
+    if (!p) return;
+    p.fillColor = patchFillColor.value;
+    p.manualColor = true;
+    patchSmartFillBtn.style.display = 'inline-block';
+    render();
+  });
+
+  patchSmartFillBtn.addEventListener('click', () => {
+    const p = getSelectedPatch();
+    if (!p) return;
+    p.manualColor = false;
+    delete p._fillCache;
+    patchSmartFillBtn.style.display = 'none';
+    render();
   });
 
   document.getElementById('deletePatchBtn').addEventListener('click', () => {
@@ -277,21 +326,13 @@
     return rgbToHex(median(rs), median(gs), median(bs));
   }
 
-  function finalizeNewPatch(r) {
-    const x0 = Math.max(0, Math.min(canvas.width, Math.min(r.x0, r.x1)));
-    const y0 = Math.max(0, Math.min(canvas.height, Math.min(r.y0, r.y1)));
-    const x1 = Math.max(0, Math.min(canvas.width, Math.max(r.x0, r.x1)));
-    const y1 = Math.max(0, Math.min(canvas.height, Math.max(r.y0, r.y1)));
-    const w = x1 - x0, h = y1 - y0;
-    if (w < 12 || h < 12) {
-      toast('Слишком маленькая область — потяни посильнее');
-      return;
-    }
+  function createPatchAt(x0, y0, w, h) {
     const patch = {
       id: nextPatchId++,
       x: x0 / canvas.width, y: y0 / canvas.height,
       w: w / canvas.width, h: h / canvas.height,
-      fillColor: sampleBorderColor(x0, y0, w, h),
+      manualColor: false, // по умолчанию — умная заливка (инпейнтинг); ручной цвет только если сам выберешь
+      fillColor: sampleBorderColor(x0, y0, w, h), // стартовое значение на случай, если переключишься на ручной цвет
       radius: 0,
       text: '',
       fontScale: 1,
@@ -303,6 +344,250 @@
     selectPatch(patch.id);
     render();
     patchTextInput.focus();
+    return patch;
+  }
+
+  function finalizeNewPatch(r) {
+    const x0 = Math.max(0, Math.min(canvas.width, Math.min(r.x0, r.x1)));
+    const y0 = Math.max(0, Math.min(canvas.height, Math.min(r.y0, r.y1)));
+    const x1 = Math.max(0, Math.min(canvas.width, Math.max(r.x0, r.x1)));
+    const y1 = Math.max(0, Math.min(canvas.height, Math.max(r.y0, r.y1)));
+    const w = x1 - x0, h = y1 - y0;
+    if (w < 12 || h < 12) {
+      toast('Слишком маленькая область — потяни посильнее');
+      return;
+    }
+    createPatchAt(x0, y0, w, h);
+  }
+
+  // --- Автопоиск текста на фото (эвристика без ИИ и без внешних вызовов) ---
+  // Ищем блоки с плотным локальным контрастом (штрихи букв дают резкие перепады яркости),
+  // группируем их в прямоугольники-кандидаты. Работает надёжно на типичных подписях мемов
+  // (жирный текст с обводкой), но может промахиваться на сложных фото — это честный компромисс
+  // без тяжёлых ИИ-моделей, поэтому ручное выделение («Замазать текст») остаётся как основной способ.
+  function detectTextRegions() {
+    const rect = getCropRect();
+    const ANALYSIS_MAX = 500;
+    const scale = Math.min(1, ANALYSIS_MAX / Math.max(canvas.width, canvas.height));
+    const aw = Math.max(1, Math.round(canvas.width * scale));
+    const ah = Math.max(1, Math.round(canvas.height * scale));
+
+    const off = document.createElement('canvas');
+    off.width = aw; off.height = ah;
+    const octx = off.getContext('2d', { willReadFrequently: true });
+    octx.drawImage(img, rect.sx, rect.sy, rect.sw, rect.sh, 0, 0, aw, ah);
+    let data;
+    try {
+      data = octx.getImageData(0, 0, aw, ah).data;
+    } catch (e) {
+      return [];
+    }
+
+    const gray = new Float32Array(aw * ah);
+    for (let i = 0; i < aw * ah; i++) {
+      const idx = i * 4;
+      gray[i] = 0.299 * data[idx] + 0.587 * data[idx + 1] + 0.114 * data[idx + 2];
+    }
+
+    const grad = new Float32Array(aw * ah);
+    let sum = 0;
+    for (let y = 1; y < ah - 1; y++) {
+      for (let x = 1; x < aw - 1; x++) {
+        const i = y * aw + x;
+        const gx = gray[i + 1] - gray[i - 1];
+        const gy = gray[i + aw] - gray[i - aw];
+        const g = Math.abs(gx) + Math.abs(gy);
+        grad[i] = g;
+        sum += g;
+      }
+    }
+    const mean = sum / (aw * ah);
+    let variance = 0;
+    for (let i = 0; i < aw * ah; i++) { const d = grad[i] - mean; variance += d * d; }
+    const std = Math.sqrt(variance / (aw * ah));
+    const threshold = mean + std * 0.8;
+
+    // Блочная плотность краёв: текст — это локально «частый частокол» контрастных штрихов.
+    const BLOCK = Math.max(3, Math.round(Math.min(aw, ah) / 90));
+    const bw = Math.ceil(aw / BLOCK), bh = Math.ceil(ah / BLOCK);
+    const density = new Float32Array(bw * bh);
+    for (let by = 0; by < bh; by++) {
+      for (let bx = 0; bx < bw; bx++) {
+        let edgeCount = 0, total = 0;
+        const x0 = bx * BLOCK, y0 = by * BLOCK;
+        for (let y = y0; y < Math.min(ah, y0 + BLOCK); y++) {
+          for (let x = x0; x < Math.min(aw, x0 + BLOCK); x++) {
+            total++;
+            if (grad[y * aw + x] > threshold) edgeCount++;
+          }
+        }
+        density[by * bw + bx] = total ? edgeCount / total : 0;
+      }
+    }
+
+    const DENSITY_MIN = 0.18;
+    const candidate = new Uint8Array(bw * bh);
+    for (let i = 0; i < bw * bh; i++) candidate[i] = density[i] >= DENSITY_MIN ? 1 : 0;
+
+    // Связные компоненты по сетке блоков (4-связность).
+    const visited = new Uint8Array(bw * bh);
+    const blobs = [];
+    for (let by = 0; by < bh; by++) {
+      for (let bx = 0; bx < bw; bx++) {
+        const start = by * bw + bx;
+        if (!candidate[start] || visited[start]) continue;
+        let minX = bx, maxX = bx, minY = by, maxY = by, count = 0;
+        const stack = [[bx, by]];
+        visited[start] = 1;
+        while (stack.length) {
+          const [cx, cy] = stack.pop();
+          count++;
+          minX = Math.min(minX, cx); maxX = Math.max(maxX, cx);
+          minY = Math.min(minY, cy); maxY = Math.max(maxY, cy);
+          const neighbors = [[cx - 1, cy], [cx + 1, cy], [cx, cy - 1], [cx, cy + 1]];
+          for (const [nx, ny] of neighbors) {
+            if (nx < 0 || ny < 0 || nx >= bw || ny >= bh) continue;
+            const ni = ny * bw + nx;
+            if (candidate[ni] && !visited[ni]) { visited[ni] = 1; stack.push([nx, ny]); }
+          }
+        }
+        blobs.push({ minX, maxX, minY, maxY, count });
+      }
+    }
+
+    const results = [];
+    for (const b of blobs) {
+      const bxPx0 = b.minX * BLOCK, byPx0 = b.minY * BLOCK;
+      const bxPx1 = Math.min(aw, (b.maxX + 1) * BLOCK), byPx1 = Math.min(ah, (b.maxY + 1) * BLOCK);
+      const bw_ = bxPx1 - bxPx0, bh_ = byPx1 - byPx0;
+      if (bw_ < aw * 0.03 || bh_ < ah * 0.012) continue; // слишком маленькое — скорее шум
+      if (bw_ > aw * 0.9 && bh_ > ah * 0.5) continue; // почти весь кадр — не текст, а сложная сцена
+      const aspect = bw_ / bh_;
+      if (aspect < 1.0 || aspect > 18) continue; // текстовые строки обычно шире, чем выше
+      const pad = Math.round(Math.min(bw_, bh_) * 0.15);
+      const fx0 = Math.max(0, bxPx0 - pad), fy0 = Math.max(0, byPx0 - pad);
+      const fx1 = Math.min(aw, bxPx1 + pad), fy1 = Math.min(ah, byPx1 + pad);
+      results.push({ x: fx0 / aw, y: fy0 / ah, w: (fx1 - fx0) / aw, h: (fy1 - fy0) / ah, score: b.count });
+    }
+
+    results.sort((a, b) => b.score - a.score);
+    return results.slice(0, 8);
+  }
+
+  function useScanCandidate(cand) {
+    const x0 = cand.x * canvas.width, y0 = cand.y * canvas.height;
+    const w = cand.w * canvas.width, h = cand.h * canvas.height;
+    createPatchAt(x0, y0, w, h);
+    scanCandidates = scanCandidates.filter(c => c !== cand);
+    if (!scanCandidates.length) setScanMode(false);
+  }
+
+  function hitTestScanCandidate(pt) {
+    for (let i = scanCandidates.length - 1; i >= 0; i--) {
+      const c = scanCandidates[i];
+      const x = c.x * canvas.width, y = c.y * canvas.height;
+      const w = c.w * canvas.width, h = c.h * canvas.height;
+      if (pt.x >= x && pt.x <= x + w && pt.y >= y && pt.y <= y + h) return c;
+    }
+    return null;
+  }
+
+  // --- Умная заливка (упрощённый безИИ-инпейнтинг, идея как у классического Telea/FMM) ---
+  // Затравка неизвестной области средним цветом каймы, дальше — гармоническая релаксация
+  // (усреднение соседей), которая тянет цвет и мягкий градиент фона внутрь пятна.
+  // Честно: даёт гладкое правдоподобное пятно на однотонном/градиентном фоне, на сложной
+  // текстуре (лица, волосы, орнамент) выглядит размыто — это ожидаемый предел метода без ИИ.
+  function computeInpaint(px, py, pw, ph) {
+    const PAD = Math.max(8, Math.round(Math.min(pw, ph) * 0.25));
+    const rx0 = Math.max(0, px - PAD), ry0 = Math.max(0, py - PAD);
+    const rx1 = Math.min(canvas.width, px + pw + PAD), ry1 = Math.min(canvas.height, py + ph + PAD);
+    const rw = rx1 - rx0, rh = ry1 - ry0;
+
+    const base = document.createElement('canvas');
+    base.width = canvas.width; base.height = canvas.height;
+    const bctx = base.getContext('2d', { willReadFrequently: true });
+    const rect = getCropRect();
+    bctx.drawImage(img, rect.sx, rect.sy, rect.sw, rect.sh, 0, 0, canvas.width, canvas.height);
+
+    const out = document.createElement('canvas');
+    out.width = Math.max(1, Math.round(pw));
+    out.height = Math.max(1, Math.round(ph));
+
+    let workData;
+    try {
+      workData = bctx.getImageData(rx0, ry0, rw, rh);
+    } catch (e) {
+      return out; // без доступа к пикселям (CORS) — вернём пустой прозрачный канвас, ниже есть фолбэк
+    }
+
+    // Даунскейл рабочего буфера для скорости релаксации на больших пятнах.
+    const MAX_WORK = 130;
+    const workScale = Math.min(1, MAX_WORK / Math.max(rw, rh));
+    const ww = Math.max(1, Math.round(rw * workScale));
+    const wh = Math.max(1, Math.round(rh * workScale));
+
+    const workCanvas = document.createElement('canvas');
+    workCanvas.width = rw; workCanvas.height = rh;
+    workCanvas.getContext('2d').putImageData(workData, 0, 0);
+
+    const small = document.createElement('canvas');
+    small.width = ww; small.height = wh;
+    const sctx = small.getContext('2d', { willReadFrequently: true });
+    sctx.drawImage(workCanvas, 0, 0, rw, rh, 0, 0, ww, wh);
+    const imgData = sctx.getImageData(0, 0, ww, wh);
+    const data = imgData.data;
+
+    const mx0 = Math.max(0, Math.round((px - rx0) * workScale));
+    const my0 = Math.max(0, Math.round((py - ry0) * workScale));
+    const mx1 = Math.min(ww, Math.round((px + pw - rx0) * workScale));
+    const my1 = Math.min(wh, Math.round((py + ph - ry0) * workScale));
+
+    const unknown = new Uint8Array(ww * wh);
+    for (let y = my0; y < my1; y++) {
+      for (let x = mx0; x < mx1; x++) unknown[y * ww + x] = 1;
+    }
+
+    let sr = 0, sg = 0, sb = 0, sc = 0;
+    for (let i = 0; i < ww * wh; i++) {
+      if (!unknown[i]) { const idx = i * 4; sr += data[idx]; sg += data[idx + 1]; sb += data[idx + 2]; sc++; }
+    }
+    const avgR = sc ? sr / sc : 220, avgG = sc ? sg / sc : 220, avgB = sc ? sb / sc : 220;
+    for (let i = 0; i < ww * wh; i++) {
+      if (unknown[i]) { const idx = i * 4; data[idx] = avgR; data[idx + 1] = avgG; data[idx + 2] = avgB; }
+    }
+
+    const ITERS = 120;
+    for (let iter = 0; iter < ITERS; iter++) {
+      for (let y = 0; y < wh; y++) {
+        for (let x = 0; x < ww; x++) {
+          const i = y * ww + x;
+          if (!unknown[i]) continue;
+          let cr = 0, cg = 0, cb = 0, cnt = 0;
+          if (x > 0) { const j = (i - 1) * 4; cr += data[j]; cg += data[j + 1]; cb += data[j + 2]; cnt++; }
+          if (x < ww - 1) { const j = (i + 1) * 4; cr += data[j]; cg += data[j + 1]; cb += data[j + 2]; cnt++; }
+          if (y > 0) { const j = (i - ww) * 4; cr += data[j]; cg += data[j + 1]; cb += data[j + 2]; cnt++; }
+          if (y < wh - 1) { const j = (i + ww) * 4; cr += data[j]; cg += data[j + 1]; cb += data[j + 2]; cnt++; }
+          if (!cnt) continue;
+          const idx = i * 4;
+          data[idx] = cr / cnt; data[idx + 1] = cg / cnt; data[idx + 2] = cb / cnt;
+        }
+      }
+    }
+
+    sctx.putImageData(imgData, 0, 0);
+
+    const octx = out.getContext('2d');
+    octx.imageSmoothingEnabled = true;
+    octx.drawImage(small, mx0, my0, Math.max(1, mx1 - mx0), Math.max(1, my1 - my0), 0, 0, out.width, out.height);
+    return out;
+  }
+
+  function ensurePatchFill(p, x, y, w, h) {
+    const sig = `${x},${y},${w},${h},${cropMode}`;
+    if (p._fillCache && p._fillCache.sig === sig) return p._fillCache.canvas;
+    const tex = computeInpaint(x, y, w, h);
+    p._fillCache = { sig, canvas: tex };
+    return tex;
   }
 
   function fitPatchFont(text, w, h) {
@@ -317,11 +602,11 @@
   }
 
   function drawPatch(p) {
-    const x = p.x * canvas.width, y = p.y * canvas.height;
-    const w = p.w * canvas.width, h = p.h * canvas.height;
+    const x = Math.round(p.x * canvas.width), y = Math.round(p.y * canvas.height);
+    const w = Math.round(p.w * canvas.width), h = Math.round(p.h * canvas.height);
     const r = Math.max(0, Math.min(p.radius, w / 2, h / 2));
 
-    ctx.fillStyle = p.fillColor;
+    ctx.save();
     ctx.beginPath();
     if (r > 0) {
       ctx.moveTo(x + r, y);
@@ -333,7 +618,20 @@
     } else {
       ctx.rect(x, y, w, h);
     }
-    ctx.fill();
+    ctx.clip();
+
+    if (p.manualColor) {
+      ctx.fillStyle = p.fillColor;
+      ctx.fillRect(x, y, w, h);
+    } else if (p.id === livePreviewId) {
+      // Пока активно тащим/ресайзим — дешёвый цвет вместо тяжёлой релаксации, для отзывчивости.
+      ctx.fillStyle = sampleBorderColor(x, y, w, h);
+      ctx.fillRect(x, y, w, h);
+    } else {
+      const tex = ensurePatchFill(p, x, y, w, h);
+      ctx.drawImage(tex, x, y, w, h);
+    }
+    ctx.restore();
 
     if (p.text) {
       const rawText = p.caps ? p.text.toUpperCase() : p.text;
@@ -445,6 +743,7 @@
       patches = [];
       selectedPatchId = null;
       setPatchMode(false);
+      setScanMode(false);
       dropcard.style.display = 'none';
       editorCard.style.display = 'block';
       if (onLoaded) onLoaded();
@@ -747,6 +1046,31 @@
       ctx.strokeRect(x, y, w, h);
       ctx.restore();
     }
+
+    if (scanMode && scanCandidates.length) {
+      ctx.save();
+      scanCandidates.forEach((c, i) => {
+        const x = c.x * canvas.width, y = c.y * canvas.height;
+        const w = c.w * canvas.width, h = c.h * canvas.height;
+        ctx.strokeStyle = '#4ade80';
+        ctx.setLineDash([5, 4]);
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, y, w, h);
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#4ade80';
+        ctx.font = 'bold 14px sans-serif';
+        const label = String(i + 1);
+        const badgeR = 11;
+        ctx.beginPath();
+        ctx.arc(x + badgeR, y + badgeR, badgeR, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#111214';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, x + badgeR, y + badgeR + 1);
+      });
+      ctx.restore();
+    }
   }
 
   // --- Перетаскивание подписей ---
@@ -783,9 +1107,22 @@
       const d = ctx.getImageData(px, py, 1, 1).data;
       const hex = rgbToHex(d[0], d[1], d[2]);
       const p = getSelectedPatch();
-      if (p) { p.fillColor = hex; patchFillColor.value = hex; render(); }
+      if (p) {
+        p.fillColor = hex;
+        p.manualColor = true;
+        patchFillColor.value = hex;
+        patchSmartFillBtn.style.display = 'inline-block';
+        render();
+      }
       pipetteMode = false;
       canvas.style.cursor = patchMode ? 'crosshair' : 'grab';
+      return;
+    }
+
+    if (scanMode) {
+      const cand = hitTestScanCandidate(pt);
+      if (cand) { useScanCandidate(cand); render(); }
+      else { setScanMode(false); render(); }
       return;
     }
 
@@ -798,6 +1135,7 @@
     const handle = hitTestPatchHandle(pt);
     if (handle) {
       resizingPatch = handle;
+      livePreviewId = handle.id;
       canvas.setPointerCapture(e.pointerId);
       return;
     }
@@ -815,6 +1153,7 @@
     if (hitPatchId != null) {
       const box = patchBoxes.find(b => b.id === hitPatchId);
       draggingPatchId = hitPatchId;
+      livePreviewId = hitPatchId;
       draggingPatchOffset = { dx: pt.x - box.x, dy: pt.y - box.y };
       if (hitPatchId !== selectedPatchId) selectPatch(hitPatchId);
       canvas.setPointerCapture(e.pointerId);
@@ -863,6 +1202,10 @@
       dragging = null;
       draggingPatchId = null;
       canvas.style.cursor = 'grab';
+      if (livePreviewId != null) {
+        livePreviewId = null;
+        render(); // финальный проход умной заливки после отпускания — во время жеста рисовали дешёвый цвет
+      }
     })
   );
 
@@ -887,6 +1230,7 @@
     patches = [];
     selectedPatchId = null;
     setPatchMode(false);
+    setScanMode(false);
     renderCaptionList();
     syncCaptionEditor();
     renderPatchList();
@@ -952,7 +1296,7 @@
       kind: 'photo',
       imageDataUrl: origSrc,
       captions: captions.map(({ id, ...rest }) => rest),
-      patches: patches.map(({ id, ...rest }) => rest),
+      patches: patches.map(({ id, _fillCache, ...rest }) => rest),
       createdAt: Date.now()
     });
     toast('Сохранено в Трофеи');

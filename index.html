@@ -136,19 +136,28 @@
           </div>
           <div class="col">
             <label>Надпись по центру фото</label>
-            <button id="patchModeBtn">🩹 Замазать текст</button>
+            <div class="row">
+              <button id="scanTextBtn">🔍 Найти текст на фото</button>
+              <button id="patchModeBtn">🩹 Замазать текст вручную</button>
+            </div>
+            <div class="muted" id="scanHint" style="display:none; margin-top:4px;">Найденные надписи подсвечены зелёным на картинке — кликни по нужной рамке, чтобы её замазать. Клик мимо — отменить поиск.</div>
             <div class="muted" id="patchModeHint" style="display:none; margin-top:4px;">Тяни прямоугольник поверх старой надписи на картинке — отпустишь, сразу можно печатать свой текст.</div>
             <div class="row" id="patchList" style="margin:4px 0;"></div>
           </div>
           <div class="col" id="patchEditor" style="display:none; border:1px solid var(--border); border-radius:8px; padding:8px;">
+            <div class="muted" style="margin-top:0;">Заливка по умолчанию — умная (сама подстраивается под фон вокруг). Выбери цвет вручную, если результат выглядит криво.</div>
             <div class="row">
               <div class="col">
-                <label>Цвет заливки</label>
+                <label>Цвет заливки (ручной)</label>
                 <input type="color" id="patchFillColor" value="#ffffff">
               </div>
               <div class="col">
                 <label>&nbsp;</label>
                 <button id="patchEyedropBtn">🎯 Взять цвет с картинки</button>
+              </div>
+              <div class="col">
+                <label>&nbsp;</label>
+                <button id="patchSmartFillBtn" style="display:none;">🪄 Вернуть умную заливку</button>
               </div>
             </div>
             <label>Скругление углов</label>
