@@ -13,6 +13,8 @@
   const fontColorInput = document.getElementById('fontColor');
   const strokeColorInput = document.getElementById('strokeColor');
   const capsToggle = document.getElementById('capsToggle');
+  const plateToggle = document.getElementById('plateToggle');
+  const plateColorInput = document.getElementById('plateColor');
 
   let img = null;
   let origSrc = null; // исходная картинка без подписей (для Трофеев)
@@ -267,18 +269,30 @@
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.font = `bold ${fontPx}px Impact, "Arial Black", sans-serif`;
+
+    // Замеряем ширину строк заранее — нужно знать габариты блока ДО того,
+    // как рисовать подложку (если она включена — перекрывает всё, что было под текстом).
+    let maxLineWidth = 0;
+    lines.forEach(line => { maxLineWidth = Math.max(maxLineWidth, ctx.measureText(line).width); });
+
+    if (plateToggle.checked) {
+      const padX = fontPx * 0.35, padY = fontPx * 0.25;
+      const plateW = maxLineWidth + padX * 2;
+      const plateH = blockHeight + padY * 2;
+      ctx.fillStyle = plateColorInput.value;
+      ctx.fillRect(cx - plateW / 2, cy - plateH / 2, plateW, plateH);
+    }
+
     ctx.lineJoin = 'round';
     ctx.miterLimit = 2;
     ctx.strokeStyle = strokeColorInput.value;
     ctx.lineWidth = Math.max(2, fontPx * 0.09);
     ctx.fillStyle = fontColorInput.value;
 
-    let maxLineWidth = 0;
     lines.forEach((line, i) => {
       const y = startY + i * lineHeight;
       ctx.strokeText(line, cx, y);
       ctx.fillText(line, cx, y);
-      maxLineWidth = Math.max(maxLineWidth, ctx.measureText(line).width);
     });
 
     return { cx, cy, halfW: maxLineWidth / 2, halfH: blockHeight / 2 };
@@ -301,7 +315,7 @@
     hitBoxes.bottom = drawTextBlock(bottomTextInput.value, state.textPos.bottom.x, state.textPos.bottom.y);
   }
 
-  [topTextInput, bottomTextInput, fontSizeInput, fontColorInput, strokeColorInput, capsToggle]
+  [topTextInput, bottomTextInput, fontSizeInput, fontColorInput, strokeColorInput, capsToggle, plateToggle, plateColorInput]
     .forEach(el => el.addEventListener('input', render));
 
   // --- Перетаскивание подписей ---
