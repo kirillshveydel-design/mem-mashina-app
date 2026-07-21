@@ -134,12 +134,48 @@
               <button id="stripResetBtn" style="margin-top:6px;">Сбросить</button>
             </div>
           </div>
-          <div class="muted">Подсказка: перетаскивай подписи прямо на картинке мышкой или пальцем.</div>
-          <div class="editor-checklist" id="photoChecklist">
-            <label><input type="checkbox" class="chk"> Понятно без контекста за 2 секунды</label>
-            <label><input type="checkbox" class="chk"> Ирония направлена на себя, не вниз на кого-то другого</label>
-            <label><input type="checkbox" class="chk"> Ровно один панчлайн, не два</label>
+          <div class="col">
+            <label>Надпись по центру фото</label>
+            <button id="patchModeBtn">🩹 Замазать текст</button>
+            <div class="muted" id="patchModeHint" style="display:none; margin-top:4px;">Тяни прямоугольник поверх старой надписи на картинке — отпустишь, сразу можно печатать свой текст.</div>
+            <div class="row" id="patchList" style="margin:4px 0;"></div>
           </div>
+          <div class="col" id="patchEditor" style="display:none; border:1px solid var(--border); border-radius:8px; padding:8px;">
+            <div class="row">
+              <div class="col">
+                <label>Цвет заливки</label>
+                <input type="color" id="patchFillColor" value="#ffffff">
+              </div>
+              <div class="col">
+                <label>&nbsp;</label>
+                <button id="patchEyedropBtn">🎯 Взять цвет с картинки</button>
+              </div>
+            </div>
+            <label>Скругление углов</label>
+            <input type="range" id="patchRadius" min="0" max="20" value="0">
+            <label>Текст внутри (необязательно)</label>
+            <input type="text" id="patchTextInput" placeholder="СВОЙ ТЕКСТ">
+            <div class="row">
+              <div class="col">
+                <label>Размер текста</label>
+                <input type="range" id="patchFontScale" min="50" max="200" value="100">
+              </div>
+              <div class="col">
+                <label>Цвет текста</label>
+                <input type="color" id="patchTextColor" value="#ffffff">
+              </div>
+              <div class="col">
+                <label>Обводка</label>
+                <input type="color" id="patchStrokeColor" value="#000000">
+              </div>
+            </div>
+            <label style="display:flex; align-items:center; gap:6px;">
+              <input type="checkbox" id="patchCaps" checked style="width:auto;"> CAPS
+            </label>
+            <button id="deletePatchBtn" style="margin-top:4px;">Удалить эту замазку</button>
+          </div>
+          <div class="muted">Подсказка: перетаскивай подписи прямо на картинке мышкой или пальцем.</div>
+          <div class="muted">Перед постингом: понятно за 2 секунды? ирония на себя? один панчлайн?</div>
           <div class="row" style="margin-top:8px;">
             <button class="primary" id="exportBtn">Скачать PNG</button>
             <button id="queueBtn">В очередь постов</button>
@@ -261,11 +297,7 @@
       </div>
 
       <div class="card">
-        <div class="editor-checklist" id="videoChecklist">
-          <label><input type="checkbox" class="chk"> Понятно без контекста за 2 секунды</label>
-          <label><input type="checkbox" class="chk"> Ирония направлена на себя, не вниз на кого-то другого</label>
-          <label><input type="checkbox" class="chk"> Ровно один панчлайн, не два</label>
-        </div>
+        <div class="muted">Перед постингом: понятно за 2 секунды? ирония на себя? один панчлайн?</div>
         <div class="row">
           <button class="primary" id="exportWebmBtn">Скачать WebM</button>
           <button id="exportMp4Btn">Скачать MP4</button>

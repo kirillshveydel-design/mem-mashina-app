@@ -326,11 +326,19 @@ header.topbar nav [data-tab].active {
 .bank-status { font-size: 12px; color: var(--muted); margin-top: 6px; }
 
 /* --- Список независимых подписей в фоторедакторе --- */
-#captionList button.active {
+#captionList button.active,
+#patchList button.active {
   background: var(--accent);
   color: var(--accent-text);
   border-color: var(--accent);
   font-weight: 600;
+}
+
+/* --- Кнопка режима «Замазать текст», пока активен режим выделения --- */
+#patchModeBtn.active {
+  background: var(--danger);
+  color: #fff;
+  border-color: var(--danger);
 }
 
 /* --- Кнопка выхода из редактора (крестик в углу) --- */

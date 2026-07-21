@@ -727,7 +727,6 @@
     link.download = filename;
     link.href = URL.createObjectURL(blob);
     link.click();
-    document.querySelectorAll('#videoChecklist .chk').forEach(c => c.checked = false);
   }
 
   let ffmpegInstance = null;
