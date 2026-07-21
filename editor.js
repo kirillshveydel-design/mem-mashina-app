@@ -317,8 +317,7 @@
     const off = document.createElement('canvas');
     off.width = canvas.width; off.height = canvas.height;
     const octx = off.getContext('2d', { willReadFrequently: true });
-    const rect = getCropRect();
-    octx.drawImage(img, rect.sx, rect.sy, rect.sw, rect.sh, 0, 0, canvas.width, canvas.height);
+    drawBaseImage(octx, canvas.width, canvas.height);
     let data;
     try {
       data = octx.getImageData(0, 0, canvas.width, canvas.height).data;
@@ -384,7 +383,6 @@
   // (жирный текст с обводкой), но может промахиваться на сложных фото — это честный компромисс
   // без тяжёлых ИИ-моделей, поэтому ручное выделение («Замазать текст») остаётся как основной способ.
   function detectTextRegions() {
-    const rect = getCropRect();
     const ANALYSIS_MAX = 600;
     const scale = Math.min(1, ANALYSIS_MAX / Math.max(canvas.width, canvas.height));
     const aw = Math.max(1, Math.round(canvas.width * scale));
@@ -393,7 +391,7 @@
     const off = document.createElement('canvas');
     off.width = aw; off.height = ah;
     const octx = off.getContext('2d', { willReadFrequently: true });
-    octx.drawImage(img, rect.sx, rect.sy, rect.sw, rect.sh, 0, 0, aw, ah);
+    drawBaseImage(octx, aw, ah);
     let imgData;
     try {
       imgData = octx.getImageData(0, 0, aw, ah);
@@ -667,8 +665,7 @@
     const base = document.createElement('canvas');
     base.width = canvas.width; base.height = canvas.height;
     const bctx = base.getContext('2d', { willReadFrequently: true });
-    const rect = getCropRect();
-    bctx.drawImage(img, rect.sx, rect.sy, rect.sw, rect.sh, 0, 0, canvas.width, canvas.height);
+    drawBaseImage(bctx, canvas.width, canvas.height);
 
     const out = document.createElement('canvas');
     out.width = Math.max(1, Math.round(pw));
@@ -723,8 +720,7 @@
     const base = document.createElement('canvas');
     base.width = canvas.width; base.height = canvas.height;
     const bctx = base.getContext('2d', { willReadFrequently: true });
-    const rect = getCropRect();
-    bctx.drawImage(img, rect.sx, rect.sy, rect.sw, rect.sh, 0, 0, canvas.width, canvas.height);
+    drawBaseImage(bctx, canvas.width, canvas.height);
 
     let imgData;
     try {
@@ -742,7 +738,7 @@
   }
 
   function ensurePatchFill(p, x, y, w, h) {
-    const sig = `${x},${y},${w},${h},${cropMode}`;
+    const sig = `${x},${y},${w},${h},${cropMode},${rotationDeg}`;
     if (p._fillCache && p._fillCache.sig === sig) return p._fillCache.canvas;
     const tex = computeSmartFill(x, y, w, h);
     p._fillCache = { sig, canvas: tex };
@@ -888,32 +884,108 @@
     patch.y = y0 / canvas.height;
   }
 
+  // --- Автоулучшение при каждой загрузке: резкость + контраст + насыщенность ---
+  // Типичное фото с реддита/имиджборда выглядит плоско и мыльно после пережатия — простой
+  // canvas-фильтр (без внешних вызовов и тяжёлых ИИ-апскейлеров) делает его заметно чётче.
+  // Маленькие картинки (меньше MIN_UPSCALE_DIM) аккуратно подрастим встроенной бикубической
+  // интерполяцией браузера — не изобретает детали, но честно лучше, чем растягивание «на глаз»
+  // при отрисовке на широком канвасе.
+  function enhanceImageToDataUrl(image) {
+    const MAX_ENHANCE_DIM = 1600;
+    const MIN_UPSCALE_DIM = 900;
+    let w = image.naturalWidth, h = image.naturalHeight;
+    const longSide = Math.max(w, h);
+    let scale = 1;
+    if (longSide > MAX_ENHANCE_DIM) scale = MAX_ENHANCE_DIM / longSide;
+    else if (longSide < MIN_UPSCALE_DIM) scale = Math.min(2, MIN_UPSCALE_DIM / longSide);
+    w = Math.max(1, Math.round(w * scale));
+    h = Math.max(1, Math.round(h * scale));
+
+    const ecanvas = document.createElement('canvas');
+    ecanvas.width = w; ecanvas.height = h;
+    const ectx = ecanvas.getContext('2d', { willReadFrequently: true });
+    ectx.imageSmoothingEnabled = true;
+    ectx.imageSmoothingQuality = 'high';
+    ectx.drawImage(image, 0, 0, w, h);
+
+    let imgData;
+    try {
+      imgData = ectx.getImageData(0, 0, w, h);
+    } catch (e) {
+      return image.src; // внешний источник без CORS — отдаём как есть, без улучшения
+    }
+    sharpenAndBoost(imgData, w, h);
+    ectx.putImageData(imgData, 0, 0);
+    return ecanvas.toDataURL('image/png');
+  }
+
+  function sharpenAndBoost(imgData, w, h) {
+    const data = imgData.data;
+    const n = w * h;
+    const R = new Float32Array(n), G = new Float32Array(n), B = new Float32Array(n);
+    for (let i = 0; i < n; i++) { const idx = i * 4; R[i] = data[idx]; G[i] = data[idx + 1]; B[i] = data[idx + 2]; }
+
+    const blurR = boxBlur(R, w, h, 2);
+    const blurG = boxBlur(G, w, h, 2);
+    const blurB = boxBlur(B, w, h, 2);
+
+    const SHARPEN = 0.6, CONTRAST = 1.08, SATURATION = 1.18;
+    const clamp = v => v < 0 ? 0 : v > 255 ? 255 : v;
+
+    for (let i = 0; i < n; i++) {
+      let r = R[i] + SHARPEN * (R[i] - blurR[i]);
+      let g = G[i] + SHARPEN * (G[i] - blurG[i]);
+      let b = B[i] + SHARPEN * (B[i] - blurB[i]);
+
+      r = (r - 128) * CONTRAST + 128;
+      g = (g - 128) * CONTRAST + 128;
+      b = (b - 128) * CONTRAST + 128;
+
+      const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+      r = gray + (r - gray) * SATURATION;
+      g = gray + (g - gray) * SATURATION;
+      b = gray + (b - gray) * SATURATION;
+
+      const idx = i * 4;
+      data[idx] = clamp(r); data[idx + 1] = clamp(g); data[idx + 2] = clamp(b);
+    }
+  }
+
   function loadImageFromSource(src, onLoaded) {
-    const image = new Image();
-    image.onload = () => {
-      img = image;
-      origSrc = src;
-      cropMode = null;
-      stripTop = 0;
-      stripBottom = 0;
-      stripPanel.style.display = 'none';
-      captions = [];
-      selectedCaptionId = null;
-      patches = [];
-      selectedPatchId = null;
-      setPatchMode(false);
-      setScanMode(false);
-      dropcard.style.display = 'none';
-      editorCard.style.display = 'block';
-      if (onLoaded) onLoaded();
-      renderCaptionList();
-      syncCaptionEditor();
-      renderPatchList();
-      syncPatchEditor();
-      render();
+    const raw = new Image();
+    raw.onload = () => {
+      const enhancedSrc = enhanceImageToDataUrl(raw);
+      const image = new Image();
+      image.onload = () => {
+        img = image;
+        origSrc = enhancedSrc;
+        cropMode = null;
+        stripTop = 0;
+        stripBottom = 0;
+        stripPanel.style.display = 'none';
+        rotationDeg = 0;
+        rotationInput.value = 0;
+        rotationVal.textContent = '0';
+        captions = [];
+        selectedCaptionId = null;
+        patches = [];
+        selectedPatchId = null;
+        setPatchMode(false);
+        setScanMode(false);
+        dropcard.style.display = 'none';
+        editorCard.style.display = 'block';
+        if (onLoaded) onLoaded();
+        renderCaptionList();
+        syncCaptionEditor();
+        renderPatchList();
+        syncPatchEditor();
+        render();
+      };
+      image.onerror = () => toast('Не удалось загрузить картинку');
+      image.src = enhancedSrc;
     };
-    image.onerror = () => toast('Не удалось загрузить картинку');
-    image.src = src;
+    raw.onerror = () => toast('Не удалось загрузить картинку');
+    raw.src = src;
   }
 
   function loadImageFromFile(file) {
@@ -997,6 +1069,50 @@
   document.getElementById('cropSquare').addEventListener('click', () => { cropMode = 'square'; render(); });
   document.getElementById('cropPortrait').addEventListener('click', () => { cropMode = 'portrait'; render(); });
   document.getElementById('cropReset').addEventListener('click', () => { cropMode = null; render(); });
+
+  // --- Выравнивание (ручной поворот на небольшой угол — «выпрямить» кривой горизонт) ---
+  let rotationDeg = 0;
+  const rotationInput = document.getElementById('rotationInput');
+  const rotationVal = document.getElementById('rotationVal');
+
+  // Масштаб, на который нужно увеличить картинку при повороте на angleRad, чтобы после
+  // поворота она по-прежнему полностью закрывала прямоугольник w×h (без пустых уголков).
+  function coverScaleForRotation(w, h, angleRad) {
+    const c = Math.abs(Math.cos(angleRad)), s = Math.abs(Math.sin(angleRad));
+    const scaleForWidth = (w * c + h * s) / w;
+    const scaleForHeight = (h * c + w * s) / h;
+    return Math.max(scaleForWidth, scaleForHeight);
+  }
+
+  // Общий способ нарисовать базовую картинку (кроп + поворот-выравнивание) в любой контекст —
+  // использует и обычный рендер, и все места, что берут «чистый» фон под подписями/замазками
+  // (иначе замазка сэмплировала бы не тот фон, что реально виден после поворота).
+  function drawBaseImage(targetCtx, targetW, targetH) {
+    const rect = getCropRect();
+    targetCtx.save();
+    if (rotationDeg) {
+      const angleRad = rotationDeg * Math.PI / 180;
+      const coverScale = coverScaleForRotation(targetW, targetH, angleRad);
+      targetCtx.translate(targetW / 2, targetH / 2);
+      targetCtx.rotate(angleRad);
+      targetCtx.scale(coverScale, coverScale);
+      targetCtx.translate(-targetW / 2, -targetH / 2);
+    }
+    targetCtx.drawImage(img, rect.sx, rect.sy, rect.sw, rect.sh, 0, 0, targetW, targetH);
+    targetCtx.restore();
+  }
+
+  rotationInput.addEventListener('input', () => {
+    rotationDeg = Number(rotationInput.value);
+    rotationVal.textContent = rotationDeg.toFixed(1);
+    render();
+  });
+  document.getElementById('rotationResetBtn').addEventListener('click', () => {
+    rotationDeg = 0;
+    rotationInput.value = 0;
+    rotationVal.textContent = '0';
+    render();
+  });
 
   // --- Обрезка однотонных полос с чужим текстом (сверху/снизу от края) ---
   const MAX_STRIP_FRACTION = 0.35;
@@ -1188,7 +1304,7 @@
     canvas.height = Math.round(h * scale);
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(img, rect.sx, rect.sy, rect.sw, rect.sh, 0, 0, canvas.width, canvas.height);
+    drawBaseImage(ctx, canvas.width, canvas.height);
 
     patchBoxes = patches.map(p => drawPatch(p));
     hitBoxes = captions.map(cap => drawCaption(cap)).filter(Boolean);
@@ -1384,6 +1500,9 @@
     stripTop = 0;
     stripBottom = 0;
     stripPanel.style.display = 'none';
+    rotationDeg = 0;
+    rotationInput.value = 0;
+    rotationVal.textContent = '0';
     captions = [];
     selectedCaptionId = null;
     patches = [];
@@ -1405,6 +1524,9 @@
   // --- Загрузка трофея (структура + картинка) — вызывается из вкладки «Очередь» ---
   function loadTrophy(t) {
     loadImageFromSource(t.imageDataUrl, () => {
+      rotationDeg = t.rotationDeg || 0;
+      rotationInput.value = rotationDeg;
+      rotationVal.textContent = rotationDeg.toFixed(1);
       if (t.patches && t.patches.length) {
         patches = t.patches.map(p => ({ ...p, id: nextPatchId++ }));
       }
@@ -1456,6 +1578,7 @@
       imageDataUrl: origSrc,
       captions: captions.map(({ id, ...rest }) => rest),
       patches: patches.map(({ id, _fillCache, ...rest }) => rest),
+      rotationDeg,
       createdAt: Date.now()
     });
     toast('Сохранено в Трофеи');

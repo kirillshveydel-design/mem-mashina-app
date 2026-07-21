@@ -117,6 +117,13 @@
             </div>
           </div>
           <div class="col">
+            <label>Выровнять (наклон): <span id="rotationVal">0</span>°</label>
+            <div class="row">
+              <input type="range" id="rotationInput" min="-15" max="15" value="0" step="0.5" style="flex:1;">
+              <button id="rotationResetBtn">Сбросить</button>
+            </div>
+          </div>
+          <div class="col">
             <label>Чужая подпись на картинке</label>
             <button id="stripDetectBtn">🩹 Убрать полосы с текстом</button>
             <div class="muted" style="margin-top:4px;">Работает только для однотонной полосы у самого края (сверху/снизу) — если подпись прямо по центру фото, этот инструмент её не тронет, содержимое не потеряется.</div>
