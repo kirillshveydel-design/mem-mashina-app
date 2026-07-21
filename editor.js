@@ -52,6 +52,13 @@
 
   function selectCaption(id) {
     selectedCaptionId = id;
+    // Подпись и замазка — взаимоисключающий выбор: иначе непонятно, что именно удалит Cmd+Delete,
+    // и одновременно показывались бы обе панели редактирования.
+    if (selectedPatchId != null) {
+      selectedPatchId = null;
+      syncPatchEditor();
+      renderPatchList();
+    }
     syncCaptionEditor();
     renderCaptionList();
     render();
@@ -203,6 +210,11 @@
 
   function selectPatch(id) {
     selectedPatchId = id;
+    if (selectedCaptionId != null) {
+      selectedCaptionId = null;
+      syncCaptionEditor();
+      renderCaptionList();
+    }
     syncPatchEditor();
     renderPatchList();
     render();
@@ -1483,6 +1495,26 @@
       }
     })
   );
+
+  // --- Удаление выбранной подписи/замазки клавишей Cmd+Delete (Mac) или Ctrl+Delete ---
+  // Игнорируем, если фокус в ВИДИМОМ текстовом поле — иначе перехватывали бы «удалить строку» при
+  // наборе текста. Проверяем именно видимость (offsetParent), а не только tagName: после переключения
+  // выбора фокус может остаться на уже скрытом (display:none) поле предыдущей панели редактирования.
+  window.addEventListener('keydown', e => {
+    if (!e.metaKey && !e.ctrlKey) return;
+    if (e.key !== 'Backspace' && e.key !== 'Delete') return;
+    const active = document.activeElement;
+    const activeTag = active && active.tagName;
+    const activeVisible = active && active.offsetParent !== null;
+    if ((activeTag === 'INPUT' || activeTag === 'TEXTAREA') && activeVisible) return;
+    if (selectedCaptionId != null) {
+      e.preventDefault();
+      deleteCaption(selectedCaptionId);
+    } else if (selectedPatchId != null) {
+      e.preventDefault();
+      deletePatch(selectedPatchId);
+    }
+  });
 
   // --- Экспорт ---
   document.getElementById('exportBtn').addEventListener('click', () => {
