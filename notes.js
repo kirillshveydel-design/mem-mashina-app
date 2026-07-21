@@ -100,8 +100,97 @@
     picked.forEach((text, i) => notes.push({ id: now + i + Math.random(), text, ts: now + i }));
     save(notes);
     render();
+    refreshBankStatus();
     toast(`Добавлено ${picked.length} тем`);
   });
+
+  // --- Индикатор старения банка тем ---
+  function refreshBankStatus() {
+    const el = document.getElementById('topicBankStatus');
+    if (!el) return;
+    const total = TOPIC_BANK.length;
+    const remaining = TOPIC_BANK.filter(text => !mmPublishedHasTopic(text)).length;
+    el.textContent = `Темы: осталось ${remaining}/${total} неопубликованных`;
+    const isLow = total > 0 && remaining / total <= 0.2;
+    el.classList.toggle('chip-low', isLow);
+    el.title = isLow
+      ? 'Банк почти исчерпан — попроси Claude в чате дополнить его новыми темами на основе того, что реально залетело'
+      : '';
+  }
+  refreshBankStatus();
+
+  // --- Ручное добавление подписей в банк (custom-captions), без похода в Claude Code ---
+  const CUSTOM_CAPTIONS_KEY = 'mm_custom_captions_v1';
+  const VALID_NICHES = ['vayb', 'net', 'ved', 'work'];
+
+  function loadCustomCaptions() {
+    try {
+      return JSON.parse(localStorage.getItem(CUSTOM_CAPTIONS_KEY) || '[]');
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function saveCustomCaptions(list) {
+    localStorage.setItem(CUSTOM_CAPTIONS_KEY, JSON.stringify(list));
+  }
+
+  document.getElementById('customCaptionsAddBtn').addEventListener('click', () => {
+    const raw = document.getElementById('customCaptionsInput').value;
+    const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+    if (!lines.length) { toast('Вставь хотя бы одну строку в формате ниша | верх | низ'); return; }
+
+    const parsed = [];
+    const errors = [];
+    lines.forEach((line, i) => {
+      const parts = line.split('|').map(p => p.trim());
+      if (parts.length !== 3 || !parts[0] || !parts[1] || !parts[2]) {
+        errors.push(`строка ${i + 1}: нужно ровно 3 поля через "|"`);
+        return;
+      }
+      const [niche, top, bottom] = parts;
+      if (!VALID_NICHES.includes(niche)) {
+        errors.push(`строка ${i + 1}: ниша "${niche}" неизвестна (доступны: ${VALID_NICHES.join(', ')})`);
+        return;
+      }
+      parsed.push({ niche, top, bottom });
+    });
+
+    if (errors.length) {
+      toast('Ошибки: ' + errors.join('; '));
+      return;
+    }
+
+    const existing = loadCustomCaptions();
+    saveCustomCaptions(existing.concat(parsed));
+    document.getElementById('customCaptionsInput').value = '';
+    toast(`Добавлено ${parsed.length} подписей в custom-банк`);
+    if (window.__memMachineCaptions) window.__memMachineCaptions.refreshChipCounts();
+  });
+
+  function renderCustomCaptionsList() {
+    const container = document.getElementById('customCaptionsList');
+    const items = loadCustomCaptions();
+    container.innerHTML = items.length
+      ? items.map(c => `<div class="muted" style="padding:4px 0; border-bottom:1px solid var(--border);">[${c.niche}] ${c.top} / ${c.bottom}</div>`).join('')
+      : '<div class="muted">Custom-банк пуст.</div>';
+  }
+
+  document.getElementById('customCaptionsShowBtn').addEventListener('click', () => {
+    const container = document.getElementById('customCaptionsList');
+    const isHidden = container.style.display === 'none';
+    if (isHidden) renderCustomCaptionsList();
+    container.style.display = isHidden ? 'block' : 'none';
+  });
+
+  document.getElementById('customCaptionsClearBtn').addEventListener('click', () => {
+    saveCustomCaptions([]);
+    renderCustomCaptionsList();
+    toast('Custom-банк очищен');
+    if (window.__memMachineCaptions) window.__memMachineCaptions.refreshChipCounts();
+  });
+
+  window.__memMachineNotes = { refreshBankStatus };
 
   exportBtn.addEventListener('click', async () => {
     const notes = load();

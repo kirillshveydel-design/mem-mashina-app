@@ -280,6 +280,7 @@ header.topbar nav [data-tab].active {
 
 /* --- Очередь и Трофеи --- */
 .draft-card { display:flex; gap:10px; align-items:center; padding:8px; border:1px solid var(--border); border-radius:8px; margin-bottom:8px; background:var(--panel-2); }
+.draft-card.draft-card-wrap { flex-direction: column; align-items: stretch; }
 .draft-card .thumb { width:70px; height:70px; object-fit:cover; border-radius:6px; background:#000; flex-shrink:0; }
 .draft-card .info { flex:1; min-width:0; }
 .draft-card .info .title { font-weight:600; font-size:14px; }
@@ -314,3 +315,12 @@ header.topbar nav [data-tab].active {
   cursor: pointer;
 }
 .editor-checklist input[type="checkbox"] { width: auto; }
+
+/* --- Индикатор старения банка на чипах ниш --- */
+.chip-frac { font-size: 10px; opacity: .75; margin-left: 4px; }
+#nicheChips button.chip-low,
+.bank-status.chip-low {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.bank-status { font-size: 12px; color: var(--muted); margin-top: 6px; }

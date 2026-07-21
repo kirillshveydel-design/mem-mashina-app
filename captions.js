@@ -50,8 +50,26 @@
     return a;
   }
 
+  const CUSTOM_KEY = 'mm_custom_captions_v1';
+
+  function loadCustomCaptions() {
+    try {
+      return JSON.parse(localStorage.getItem(CUSTOM_KEY) || '[]');
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function fullBankForNiche(niche) {
+    const builtin = CAPTION_BANK[niche] || [];
+    const custom = loadCustomCaptions().filter(c => c.niche === niche).map(c => [c.top, c.bottom]);
+    return builtin.concat(custom);
+  }
+
   function poolForNiche(niche) {
-    const pool = niche === 'all' ? Object.values(CAPTION_BANK).flat() : (CAPTION_BANK[niche] || []);
+    const pool = niche === 'all'
+      ? Object.keys(CAPTION_BANK).flatMap(n => fullBankForNiche(n))
+      : fullBankForNiche(niche);
     // Никогда повторно не предлагаем уже опубликованную пару.
     return pool.filter(([top, bottom]) => !mmPublishedHasCaption(top, bottom));
   }
@@ -86,6 +104,33 @@
       eventModePanel.style.display = isEvent ? 'block' : 'none';
     });
   });
+
+  // --- Индикатор старения банка: «осталось X/Y» на каждом чипе ниши ---
+  const REAL_NICHES = Object.keys(CAPTION_BANK); // vayb, net, ved, work
+
+  function refreshChipCounts() {
+    REAL_NICHES.forEach(niche => {
+      const total = fullBankForNiche(niche).length;
+      const remaining = poolForNiche(niche).length;
+      const chip = document.querySelector(`#nicheChips [data-niche="${niche}"]`);
+      if (!chip) return;
+      let fracEl = chip.querySelector('.chip-frac');
+      if (!fracEl) {
+        fracEl = document.createElement('span');
+        fracEl.className = 'chip-frac';
+        chip.appendChild(fracEl);
+      }
+      fracEl.textContent = `${remaining}/${total}`;
+      const isLow = total > 0 && remaining / total <= 0.2;
+      chip.classList.toggle('chip-low', isLow);
+      chip.title = isLow
+        ? 'Банк почти исчерпан — попроси Claude в чате дополнить его новыми подписями на основе того, что реально залетело'
+        : '';
+    });
+  }
+
+  refreshChipCounts();
+  window.__memMachineCaptions = { refreshChipCounts };
 
   captionRollBtn.addEventListener('click', () => {
     const pair = nextPair(currentNiche);

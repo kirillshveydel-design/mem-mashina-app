@@ -64,12 +64,12 @@
           <div class="col">
             <label>Ниша</label>
             <div class="row" id="nicheChips">
-              <button data-niche="all" class="active">Все</button>
-              <button data-niche="vayb">Вайбкодинг</button>
-              <button data-niche="net">Нетворкинг</button>
-              <button data-niche="ved">ВЭД</button>
-              <button data-niche="work">Про работу</button>
-              <button data-niche="event">⚡ Событие</button>
+              <button data-niche="all" class="active"><span class="chip-label">Все</span></button>
+              <button data-niche="vayb"><span class="chip-label">Вайбкодинг</span></button>
+              <button data-niche="net"><span class="chip-label">Нетворкинг</span></button>
+              <button data-niche="ved"><span class="chip-label">ВЭД</span></button>
+              <button data-niche="work"><span class="chip-label">Про работу</span></button>
+              <button data-niche="event"><span class="chip-label">⚡ Событие</span></button>
             </div>
             <button class="primary" id="captionRollBtn" style="margin-top:6px;">🎲 Подпись</button>
             <div id="eventModePanel" style="display:none; margin-top:6px;">
@@ -302,7 +302,10 @@
     <div class="card">
       <div class="row" style="justify-content:space-between; align-items:center;">
         <div class="muted">Опубликовано всего: <b id="publishedCount">0</b></div>
-        <button id="showHistoryBtn">Показать историю</button>
+        <div class="row">
+          <button id="exportScorecardBtn">📤 Экспортировать для /scorecard</button>
+          <button id="showHistoryBtn">Показать историю</button>
+        </div>
       </div>
       <div id="publishedHistoryPanel" style="display:none; margin-top:10px; max-height:240px; overflow-y:auto;"></div>
     </div>
@@ -335,6 +338,21 @@
         <button class="primary" id="ideaGenBtn">💡 Придумай за меня</button>
         <span class="muted">Добавит 5 готовых тем одним кликом — жми сколько угодно раз.</span>
       </div>
+      <div class="bank-status" id="topicBankStatus"></div>
+    </div>
+
+    <div class="card">
+      <div class="row" style="justify-content:space-between; align-items:center;">
+        <h3 style="margin:0;">Добавить свои подписи в банк</h3>
+      </div>
+      <div class="muted" style="margin-bottom:6px;">Формат — по одной паре на строку: <code>ниша | верх | низ</code> (ниши: vayb, net, ved, work)</div>
+      <textarea id="customCaptionsInput" placeholder="vayb | НАПИСАЛ ЕЩЁ ОДНОГО АГЕНТА | ТЕПЕРЬ ИХ БОЛЬШЕ, ЧЕМ КЛИЕНТОВ" style="width:100%; min-height:70px; font-family:monospace; font-size:12px;"></textarea>
+      <div class="row" style="margin-top:6px;">
+        <button class="primary" id="customCaptionsAddBtn">Добавить в банк</button>
+        <button id="customCaptionsShowBtn">Показать текущий custom-банк</button>
+        <button id="customCaptionsClearBtn">Очистить custom-банк</button>
+      </div>
+      <div id="customCaptionsList" style="display:none; margin-top:10px;"></div>
     </div>
 
     <div class="card">
