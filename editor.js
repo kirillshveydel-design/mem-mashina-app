@@ -1298,7 +1298,15 @@
       ctx.setLineDash([6, 4]);
       ctx.lineWidth = 2;
       const pad = 8;
-      ctx.strokeRect(cx - maxLineWidth / 2 - pad, cy - blockHeight / 2 - pad, maxLineWidth + pad * 2, blockHeight + pad * 2);
+      const bx = cx - maxLineWidth / 2 - pad, by = cy - blockHeight / 2 - pad;
+      const bw = maxLineWidth + pad * 2, bh = blockHeight + pad * 2;
+      ctx.strokeRect(bx, by, bw, bh);
+      ctx.setLineDash([]);
+      ctx.fillStyle = '#ffcd00';
+      const HANDLE = 5;
+      [[bx, by], [bx + bw, by], [bx, by + bh], [bx + bw, by + bh]].forEach(([hx, hy]) => {
+        ctx.fillRect(hx - HANDLE, hy - HANDLE, HANDLE * 2, HANDLE * 2);
+      });
       ctx.restore();
     }
 
@@ -1362,6 +1370,7 @@
 
   // --- Перетаскивание подписей ---
   let dragging = null; // id перетаскиваемой подписи или null
+  let resizingCaption = null; // {id, cx, cy, startDist, startFontSize} — тянем за угловой маркер
 
   function canvasPointFromEvent(e) {
     const r = canvas.getBoundingClientRect();
@@ -1380,6 +1389,26 @@
       if (Math.abs(pt.x - b.cx) <= b.halfW + pad && Math.abs(pt.y - b.cy) <= b.halfH + pad) {
         return b.id;
       }
+    }
+    return null;
+  }
+
+  // Угловые маркеры рамки выбранной подписи — тянешь за угол, текст пропорционально
+  // растёт/сжимается (меняем cap.fontSize по отношению расстояний до центра, как ресайз
+  // текстового блока в обычных графических редакторах).
+  function hitTestCaptionHandle(pt) {
+    if (selectedCaptionId == null) return null;
+    const b = hitBoxes.find(h => h.id === selectedCaptionId);
+    if (!b) return null;
+    const pad = 8, HANDLE_R = 14;
+    const corners = [
+      { x: b.cx - b.halfW - pad, y: b.cy - b.halfH - pad },
+      { x: b.cx + b.halfW + pad, y: b.cy - b.halfH - pad },
+      { x: b.cx - b.halfW - pad, y: b.cy + b.halfH + pad },
+      { x: b.cx + b.halfW + pad, y: b.cy + b.halfH + pad }
+    ];
+    for (const c of corners) {
+      if (Math.abs(pt.x - c.x) <= HANDLE_R && Math.abs(pt.y - c.y) <= HANDLE_R) return b.id;
     }
     return null;
   }
@@ -1427,6 +1456,21 @@
       return;
     }
 
+    const capHandleId = hitTestCaptionHandle(pt);
+    if (capHandleId != null) {
+      const b = hitBoxes.find(h => h.id === capHandleId);
+      const cap = captions.find(c => c.id === capHandleId);
+      resizingCaption = {
+        id: capHandleId,
+        cx: b.cx,
+        cy: b.cy,
+        startDist: Math.max(1, Math.hypot(pt.x - b.cx, pt.y - b.cy)),
+        startFontSize: Number(cap.fontSize)
+      };
+      canvas.setPointerCapture(e.pointerId);
+      return;
+    }
+
     const hitCapId = hitTest(pt);
     if (hitCapId != null) {
       dragging = hitCapId;
@@ -1462,6 +1506,17 @@
       render();
       return;
     }
+    if (resizingCaption) {
+      const cap = captions.find(c => c.id === resizingCaption.id);
+      if (cap) {
+        const dist = Math.hypot(pt.x - resizingCaption.cx, pt.y - resizingCaption.cy);
+        const scale = dist / resizingCaption.startDist;
+        cap.fontSize = Math.max(12, Math.min(140, Math.round(resizingCaption.startFontSize * scale)));
+        if (cap.id === selectedCaptionId) captionFontSize.value = cap.fontSize;
+        render();
+      }
+      return;
+    }
     if (dragging != null) {
       const cap = captions.find(c => c.id === dragging);
       if (!cap) return;
@@ -1486,6 +1541,7 @@
         return;
       }
       resizingPatch = null;
+      resizingCaption = null;
       dragging = null;
       draggingPatchId = null;
       canvas.style.cursor = 'grab';
