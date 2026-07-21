@@ -155,6 +155,9 @@
   const patchFillColor = document.getElementById('patchFillColor');
   const patchEyedropBtn = document.getElementById('patchEyedropBtn');
   const patchSmartFillBtn = document.getElementById('patchSmartFillBtn');
+  const patchManualFillToggle = document.getElementById('patchManualFillToggle');
+  const patchManualFillRow = document.getElementById('patchManualFillRow');
+  const patchRadiusRow = document.getElementById('patchRadiusRow');
   const patchRadius = document.getElementById('patchRadius');
   const patchTextInput = document.getElementById('patchTextInput');
   const patchFontScale = document.getElementById('patchFontScale');
@@ -216,15 +219,30 @@
   function renderPatchList() {
     patchListEl.innerHTML = '';
     if (!patches.length) return;
+    let blankIndex = 0;
     patches.forEach(p => {
       const chip = document.createElement('button');
-      const label = p.text ? p.text.slice(0, 14) + (p.text.length > 14 ? '…' : '') : '(без текста)';
+      const label = p.text ? p.text.slice(0, 14) + (p.text.length > 14 ? '…' : '') : String(++blankIndex);
       chip.textContent = '🩹 ' + label;
       chip.className = p.id === selectedPatchId ? 'active' : '';
       chip.addEventListener('click', () => selectPatch(p.id));
       patchListEl.appendChild(chip);
     });
   }
+
+  // Показывает/прячет блок ручного цвета и скругления углов в зависимости от того,
+  // в умном режиме сейчас патч или пользователь уже переключился на ручной цвет.
+  function updatePatchFillUI(p) {
+    const manual = p.manualColor;
+    patchManualFillToggle.style.display = manual ? 'none' : 'inline-block';
+    patchManualFillRow.style.display = manual ? 'flex' : 'none';
+    patchRadiusRow.style.display = manual ? 'block' : 'none';
+    patchSmartFillBtn.style.display = manual ? 'inline-block' : 'none';
+  }
+
+  patchManualFillToggle.addEventListener('click', () => {
+    patchManualFillRow.style.display = patchManualFillRow.style.display === 'none' ? 'flex' : 'none';
+  });
 
   function syncPatchEditor() {
     const p = getSelectedPatch();
@@ -237,7 +255,7 @@
     patchTextColor.value = p.textColor;
     patchStrokeColor.value = p.strokeColor;
     patchCaps.checked = p.caps;
-    patchSmartFillBtn.style.display = p.manualColor ? 'inline-block' : 'none';
+    updatePatchFillUI(p);
   }
 
   [
@@ -264,7 +282,7 @@
     if (!p) return;
     p.fillColor = patchFillColor.value;
     p.manualColor = true;
-    patchSmartFillBtn.style.display = 'inline-block';
+    updatePatchFillUI(p);
     render();
   });
 
@@ -273,7 +291,7 @@
     if (!p) return;
     p.manualColor = false;
     delete p._fillCache;
-    patchSmartFillBtn.style.display = 'none';
+    updatePatchFillUI(p);
     render();
   });
 
@@ -367,7 +385,7 @@
   // без тяжёлых ИИ-моделей, поэтому ручное выделение («Замазать текст») остаётся как основной способ.
   function detectTextRegions() {
     const rect = getCropRect();
-    const ANALYSIS_MAX = 500;
+    const ANALYSIS_MAX = 600;
     const scale = Math.min(1, ANALYSIS_MAX / Math.max(canvas.width, canvas.height));
     const aw = Math.max(1, Math.round(canvas.width * scale));
     const ah = Math.max(1, Math.round(canvas.height * scale));
@@ -376,97 +394,54 @@
     off.width = aw; off.height = ah;
     const octx = off.getContext('2d', { willReadFrequently: true });
     octx.drawImage(img, rect.sx, rect.sy, rect.sw, rect.sh, 0, 0, aw, ah);
-    let data;
+    let imgData;
     try {
-      data = octx.getImageData(0, 0, aw, ah).data;
+      imgData = octx.getImageData(0, 0, aw, ah);
     } catch (e) {
       return [];
     }
 
-    const gray = new Float32Array(aw * ah);
-    for (let i = 0; i < aw * ah; i++) {
-      const idx = i * 4;
-      gray[i] = 0.299 * data[idx] + 0.587 * data[idx + 1] + 0.114 * data[idx + 2];
-    }
+    // Та же маска «тонких штрихов», что и в самой замазке (только тут строукRadius фиксирован —
+    // на уменьшенной копии буквы мема почти всегда толщиной в 2-3px независимо от размера фото).
+    const thin = computeThinMask(imgData, aw, ah, 2);
 
-    const grad = new Float32Array(aw * ah);
-    let sum = 0;
-    for (let y = 1; y < ah - 1; y++) {
-      for (let x = 1; x < aw - 1; x++) {
-        const i = y * aw + x;
-        const gx = gray[i + 1] - gray[i - 1];
-        const gy = gray[i + aw] - gray[i - aw];
-        const g = Math.abs(gx) + Math.abs(gy);
-        grad[i] = g;
-        sum += g;
-      }
-    }
-    const mean = sum / (aw * ah);
-    let variance = 0;
-    for (let i = 0; i < aw * ah; i++) { const d = grad[i] - mean; variance += d * d; }
-    const std = Math.sqrt(variance / (aw * ah));
-    const threshold = mean + std * 0.8;
+    // Горизонтальная дилатация склеивает отдельные буквы одного слова/строки в общий блоб,
+    // небольшая вертикальная — чтобы соседние строки одной надписи не распадались на кусочки.
+    const dilated = dilateAniso(thin, aw, ah, Math.max(3, Math.round(aw * 0.02)), 1);
 
-    // Блочная плотность краёв: текст — это локально «частый частокол» контрастных штрихов.
-    const BLOCK = Math.max(3, Math.round(Math.min(aw, ah) / 90));
-    const bw = Math.ceil(aw / BLOCK), bh = Math.ceil(ah / BLOCK);
-    const density = new Float32Array(bw * bh);
-    for (let by = 0; by < bh; by++) {
-      for (let bx = 0; bx < bw; bx++) {
-        let edgeCount = 0, total = 0;
-        const x0 = bx * BLOCK, y0 = by * BLOCK;
-        for (let y = y0; y < Math.min(ah, y0 + BLOCK); y++) {
-          for (let x = x0; x < Math.min(aw, x0 + BLOCK); x++) {
-            total++;
-            if (grad[y * aw + x] > threshold) edgeCount++;
-          }
-        }
-        density[by * bw + bx] = total ? edgeCount / total : 0;
-      }
-    }
-
-    const DENSITY_MIN = 0.18;
-    const candidate = new Uint8Array(bw * bh);
-    for (let i = 0; i < bw * bh; i++) candidate[i] = density[i] >= DENSITY_MIN ? 1 : 0;
-
-    // Связные компоненты по сетке блоков (4-связность).
-    const visited = new Uint8Array(bw * bh);
+    const visited = new Uint8Array(aw * ah);
     const blobs = [];
-    for (let by = 0; by < bh; by++) {
-      for (let bx = 0; bx < bw; bx++) {
-        const start = by * bw + bx;
-        if (!candidate[start] || visited[start]) continue;
-        let minX = bx, maxX = bx, minY = by, maxY = by, count = 0;
-        const stack = [[bx, by]];
-        visited[start] = 1;
-        while (stack.length) {
-          const [cx, cy] = stack.pop();
-          count++;
-          minX = Math.min(minX, cx); maxX = Math.max(maxX, cx);
-          minY = Math.min(minY, cy); maxY = Math.max(maxY, cy);
-          const neighbors = [[cx - 1, cy], [cx + 1, cy], [cx, cy - 1], [cx, cy + 1]];
-          for (const [nx, ny] of neighbors) {
-            if (nx < 0 || ny < 0 || nx >= bw || ny >= bh) continue;
-            const ni = ny * bw + nx;
-            if (candidate[ni] && !visited[ni]) { visited[ni] = 1; stack.push([nx, ny]); }
-          }
-        }
-        blobs.push({ minX, maxX, minY, maxY, count });
+    const stack = [];
+    for (let start = 0; start < aw * ah; start++) {
+      if (!dilated[start] || visited[start]) continue;
+      let minX = start % aw, maxX = minX, minY = (start / aw) | 0, maxY = minY, count = 0;
+      stack.length = 0;
+      stack.push(start);
+      visited[start] = 1;
+      while (stack.length) {
+        const i = stack.pop();
+        count++;
+        const x = i % aw, y = (i / aw) | 0;
+        minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+        minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+        if (x > 0 && dilated[i - 1] && !visited[i - 1]) { visited[i - 1] = 1; stack.push(i - 1); }
+        if (x < aw - 1 && dilated[i + 1] && !visited[i + 1]) { visited[i + 1] = 1; stack.push(i + 1); }
+        if (y > 0 && dilated[i - aw] && !visited[i - aw]) { visited[i - aw] = 1; stack.push(i - aw); }
+        if (y < ah - 1 && dilated[i + aw] && !visited[i + aw]) { visited[i + aw] = 1; stack.push(i + aw); }
       }
+      blobs.push({ minX, maxX, minY, maxY, count });
     }
 
     const results = [];
     for (const b of blobs) {
-      const bxPx0 = b.minX * BLOCK, byPx0 = b.minY * BLOCK;
-      const bxPx1 = Math.min(aw, (b.maxX + 1) * BLOCK), byPx1 = Math.min(ah, (b.maxY + 1) * BLOCK);
-      const bw_ = bxPx1 - bxPx0, bh_ = byPx1 - byPx0;
+      const bw_ = b.maxX - b.minX + 1, bh_ = b.maxY - b.minY + 1;
       if (bw_ < aw * 0.03 || bh_ < ah * 0.012) continue; // слишком маленькое — скорее шум
       if (bw_ > aw * 0.9 && bh_ > ah * 0.5) continue; // почти весь кадр — не текст, а сложная сцена
       const aspect = bw_ / bh_;
-      if (aspect < 1.0 || aspect > 18) continue; // текстовые строки обычно шире, чем выше
-      const pad = Math.round(Math.min(bw_, bh_) * 0.15);
-      const fx0 = Math.max(0, bxPx0 - pad), fy0 = Math.max(0, byPx0 - pad);
-      const fx1 = Math.min(aw, bxPx1 + pad), fy1 = Math.min(ah, byPx1 + pad);
+      if (aspect < 0.8 || aspect > 20) continue; // текстовые строки обычно шире, чем выше
+      const pad = Math.round(Math.min(bw_, bh_) * 0.25);
+      const fx0 = Math.max(0, b.minX - pad), fy0 = Math.max(0, b.minY - pad);
+      const fx1 = Math.min(aw, b.maxX + 1 + pad), fy1 = Math.min(ah, b.maxY + 1 + pad);
       results.push({ x: fx0 / aw, y: fy0 / ah, w: (fx1 - fx0) / aw, h: (fy1 - fy0) / ah, score: b.count });
     }
 
@@ -492,12 +467,198 @@
     return null;
   }
 
-  // --- Умная заливка (упрощённый безИИ-инпейнтинг, идея как у классического Telea/FMM) ---
-  // Затравка неизвестной области средним цветом каймы, дальше — гармоническая релаксация
-  // (усреднение соседей), которая тянет цвет и мягкий градиент фона внутрь пятна.
-  // Честно: даёт гладкое правдоподобное пятно на однотонном/градиентном фоне, на сложной
-  // текстуре (лица, волосы, орнамент) выглядит размыто — это ожидаемый предел метода без ИИ.
-  function computeInpaint(px, py, pw, ph) {
+  // --- Умная заливка 2.0: убираем только пиксели букв, фон между ними не трогаем ---
+  // Мем-текст почти всегда контрастный (белая заливка+чёрная обводка, субтитры, цветной текст
+  // с контуром) — поэтому буквы отделяются от фона классической обработкой без ИИ и без внешних
+  // вызовов: маска «очень светлое/очень тёмное» → отсеять всё, что не тонкий штрих (эрозия) →
+  // дозалить «дырки» внутри контура (заливка сплошным цветом внутри обводки) → точечный инпейнт
+  // только этих пикселей. Если под рукой не нашлось контрастного текста (маска слишком мала или
+  // слишком велика) — честно откатываемся на старую заливку всего прямоугольника релаксацией.
+
+  function minMaxFilterPass(src, w, h, R, horizontal, isMax) {
+    const out = new Uint8Array(w * h);
+    if (horizontal) {
+      for (let y = 0; y < h; y++) {
+        const rowOff = y * w;
+        for (let x = 0; x < w; x++) {
+          const x0 = Math.max(0, x - R), x1 = Math.min(w - 1, x + R);
+          let v = isMax ? 0 : 1;
+          for (let xx = x0; xx <= x1; xx++) {
+            const s = src[rowOff + xx];
+            if (isMax ? s > v : s < v) { v = s; if (isMax ? v === 1 : v === 0) break; }
+          }
+          out[rowOff + x] = v;
+        }
+      }
+    } else {
+      for (let x = 0; x < w; x++) {
+        for (let y = 0; y < h; y++) {
+          const y0 = Math.max(0, y - R), y1 = Math.min(h - 1, y + R);
+          let v = isMax ? 0 : 1;
+          for (let yy = y0; yy <= y1; yy++) {
+            const s = src[yy * w + x];
+            if (isMax ? s > v : s < v) { v = s; if (isMax ? v === 1 : v === 0) break; }
+          }
+          out[y * w + x] = v;
+        }
+      }
+    }
+    return out;
+  }
+  const erode = (mask, w, h, R) => minMaxFilterPass(minMaxFilterPass(mask, w, h, R, true, false), w, h, R, false, false);
+  const dilate = (mask, w, h, R) => minMaxFilterPass(minMaxFilterPass(mask, w, h, R, true, true), w, h, R, false, true);
+  const dilateAniso = (mask, w, h, rx, ry) => minMaxFilterPass(minMaxFilterPass(mask, w, h, rx, true, true), w, h, ry, false, true);
+
+  // Скользящее среднее (box blur), сепарабельно и за O(w*h) через бегущую сумму — оценка
+  // «локального фона» под каждым пикселем, без учёта тонких деталей вроде букв поверх него.
+  function boxBlurPass(src, w, h, R, horizontal) {
+    const out = new Float32Array(w * h);
+    if (horizontal) {
+      for (let y = 0; y < h; y++) {
+        const rowOff = y * w;
+        let sum = 0, count = 0;
+        for (let xx = 0; xx <= Math.min(R, w - 1); xx++) { sum += src[rowOff + xx]; count++; }
+        for (let x = 0; x < w; x++) {
+          out[rowOff + x] = sum / count;
+          const addX = x + R + 1, removeX = x - R;
+          if (addX < w) { sum += src[rowOff + addX]; count++; }
+          if (removeX >= 0) { sum -= src[rowOff + removeX]; count--; }
+        }
+      }
+    } else {
+      for (let x = 0; x < w; x++) {
+        let sum = 0, count = 0;
+        for (let yy = 0; yy <= Math.min(R, h - 1); yy++) { sum += src[yy * w + x]; count++; }
+        for (let y = 0; y < h; y++) {
+          out[y * w + x] = sum / count;
+          const addY = y + R + 1, removeY = y - R;
+          if (addY < h) { sum += src[addY * w + x]; count++; }
+          if (removeY >= 0) { sum -= src[removeY * w + x]; count--; }
+        }
+      }
+    }
+    return out;
+  }
+  const boxBlur = (src, w, h, R) => boxBlurPass(boxBlurPass(src, w, h, R, true), w, h, R, false);
+
+  // Маска «тонких штрихов»: пиксели, ЛОКАЛЬНО (не абсолютно!) намного контрастнее своего
+  // окружения — это и есть суть текста поверх чего угодно (тёмный фон, светлый фон, узор).
+  // Абсолютный порог яркости тут не годится: тёмная, но однотонная сцена (например, ночная —
+  // luminance даже 30-40) не должна вся целиком считаться «текстом» только потому что она тёмная.
+  function computeThinMask(imgData, w, h, strokeR) {
+    const data = imgData.data;
+    const n = w * h;
+
+    const L = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const idx = i * 4;
+      L[i] = 0.299 * data[idx] + 0.587 * data[idx + 1] + 0.114 * data[idx + 2];
+    }
+    const blurred = boxBlur(L, w, h, Math.max(4, strokeR * 2));
+
+    const CONTRAST_THRESHOLD = 45;
+    const extreme = new Uint8Array(n);
+    for (let i = 0; i < n; i++) {
+      if (Math.abs(L[i] - blurred[i]) > CONTRAST_THRESHOLD) extreme[i] = 1;
+    }
+
+    // Тонкий штрих = контрастный пиксель, который НЕ выживает при эрозии радиусом strokeR
+    // (эрозия «съедает» всё, что не толще ~2*strokeR). Внутренность толстого пятна фона
+    // (небо, лицо, засветка) выживает и исключается — но именно как пиксели, а не «весь блоб
+    // целиком»: если буквы стоят вплотную и их контрастные зоны слиплись в одну связную область,
+    // это не должно хоронить всю строку целиком из-за одного случайно толстого места на стыке.
+    const eroded = erode(extreme, w, h, strokeR);
+    const thin = new Uint8Array(n);
+    for (let i = 0; i < n; i++) thin[i] = extreme[i] && !eroded[i] ? 1 : 0;
+    return thin;
+  }
+
+  const MAX_MASK_AREA = 500000; // патч крупнее — маску букв не считаем, идём прямиком в фолбэк
+
+  function buildLetterMask(imgData, w, h) {
+    if (w * h > MAX_MASK_AREA || w < 4 || h < 4) return null;
+    const n = w * h;
+    const strokeR = Math.max(3, Math.round(Math.min(w, h) / 25));
+    const thin = computeThinMask(imgData, w, h, strokeR);
+
+    // «Дырки»: пиксели, до которых не добраться снаружи прямоугольника, минуя контур буквы, —
+    // это внутренность буквы (например, цветная заливка внутри белого контура). Проверяем
+    // проходимость через слегка «запечатанный» (дилатированный) контур — иначе одна случайная
+    // прореха в тонкой стенке (антиалиасинг, острый угол буквы) даёт течь: заливка «убегает»
+    // наружу, кусок буквы остаётся немаскированным и потом портит цвет соседних пикселей при
+    // релаксации. Сами замаскированные пиксели по итогу — из ОРИГИНАЛЬНОГО thin, не из стенки.
+    const wall = dilate(thin, w, h, strokeR);
+    const outside = new Uint8Array(n);
+    const q = [];
+    for (let x = 0; x < w; x++) {
+      if (!wall[x]) { outside[x] = 1; q.push(x); }
+      const bi = (h - 1) * w + x;
+      if (!wall[bi]) { outside[bi] = 1; q.push(bi); }
+    }
+    for (let y = 0; y < h; y++) {
+      const li = y * w;
+      if (!wall[li]) { outside[li] = 1; q.push(li); }
+      const ri = y * w + (w - 1);
+      if (!wall[ri]) { outside[ri] = 1; q.push(ri); }
+    }
+    while (q.length) {
+      const i = q.pop();
+      const x = i % w, y = (i / w) | 0;
+      if (x > 0 && !wall[i - 1] && !outside[i - 1]) { outside[i - 1] = 1; q.push(i - 1); }
+      if (x < w - 1 && !wall[i + 1] && !outside[i + 1]) { outside[i + 1] = 1; q.push(i + 1); }
+      if (y > 0 && !wall[i - w] && !outside[i - w]) { outside[i - w] = 1; q.push(i - w); }
+      if (y < h - 1 && !wall[i + w] && !outside[i + w]) { outside[i + w] = 1; q.push(i + w); }
+    }
+
+    const merged = new Uint8Array(n);
+    for (let i = 0; i < n; i++) merged[i] = thin[i] || !outside[i] ? 1 : 0;
+
+    const finalMask = dilate(merged, w, h, 1);
+    let count = 0;
+    for (let i = 0; i < n; i++) if (finalMask[i]) count++;
+    const fraction = count / n;
+    if (fraction < 0.01 || fraction > 0.6) return null; // буквы не нашлись или что-то пошло не так
+
+    return finalMask;
+  }
+
+  // Точечный инпейнт: трогаем ТОЛЬКО пиксели маски (буквы), фон вокруг остаётся оригинальным
+  // один-в-один. Штрихи тонкие — релаксация сходится за пару десятков проходов даже без даунскейла.
+  function inpaintMaskedRegion(imgData, w, h, mask) {
+    const data = imgData.data;
+    const n = w * h;
+
+    let sr = 0, sg = 0, sb = 0, sc = 0;
+    for (let i = 0; i < n; i++) {
+      if (!mask[i]) { const idx = i * 4; sr += data[idx]; sg += data[idx + 1]; sb += data[idx + 2]; sc++; }
+    }
+    const avgR = sc ? sr / sc : 220, avgG = sc ? sg / sc : 220, avgB = sc ? sb / sc : 220;
+    for (let i = 0; i < n; i++) {
+      if (mask[i]) { const idx = i * 4; data[idx] = avgR; data[idx + 1] = avgG; data[idx + 2] = avgB; }
+    }
+
+    const ITERS = 40;
+    for (let iter = 0; iter < ITERS; iter++) {
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const i = y * w + x;
+          if (!mask[i]) continue;
+          let cr = 0, cg = 0, cb = 0, cnt = 0;
+          if (x > 0) { const j = (i - 1) * 4; cr += data[j]; cg += data[j + 1]; cb += data[j + 2]; cnt++; }
+          if (x < w - 1) { const j = (i + 1) * 4; cr += data[j]; cg += data[j + 1]; cb += data[j + 2]; cnt++; }
+          if (y > 0) { const j = (i - w) * 4; cr += data[j]; cg += data[j + 1]; cb += data[j + 2]; cnt++; }
+          if (y < h - 1) { const j = (i + w) * 4; cr += data[j]; cg += data[j + 1]; cb += data[j + 2]; cnt++; }
+          if (!cnt) continue;
+          const idx = i * 4;
+          data[idx] = cr / cnt; data[idx + 1] = cg / cnt; data[idx + 2] = cb / cnt;
+        }
+      }
+    }
+  }
+
+  // Фолбэк: старая заливка всего прямоугольника гармонической релаксацией (когда маску букв
+  // построить не удалось — например, патч слишком велик или контрастного текста в нём нет).
+  function computeFullRectInpaint(px, py, pw, ph) {
     const PAD = Math.max(8, Math.round(Math.min(pw, ph) * 0.25));
     const rx0 = Math.max(0, px - PAD), ry0 = Math.max(0, py - PAD);
     const rx1 = Math.min(canvas.width, px + pw + PAD), ry1 = Math.min(canvas.height, py + ph + PAD);
@@ -517,10 +678,9 @@
     try {
       workData = bctx.getImageData(rx0, ry0, rw, rh);
     } catch (e) {
-      return out; // без доступа к пикселям (CORS) — вернём пустой прозрачный канвас, ниже есть фолбэк
+      return out; // без доступа к пикселям (CORS) — вернём пустой прозрачный канвас
     }
 
-    // Даунскейл рабочего буфера для скорости релаксации на больших пятнах.
     const MAX_WORK = 130;
     const workScale = Math.min(1, MAX_WORK / Math.max(rw, rh));
     const ww = Math.max(1, Math.round(rw * workScale));
@@ -535,7 +695,6 @@
     const sctx = small.getContext('2d', { willReadFrequently: true });
     sctx.drawImage(workCanvas, 0, 0, rw, rh, 0, 0, ww, wh);
     const imgData = sctx.getImageData(0, 0, ww, wh);
-    const data = imgData.data;
 
     const mx0 = Math.max(0, Math.round((px - rx0) * workScale));
     const my0 = Math.max(0, Math.round((py - ry0) * workScale));
@@ -547,33 +706,7 @@
       for (let x = mx0; x < mx1; x++) unknown[y * ww + x] = 1;
     }
 
-    let sr = 0, sg = 0, sb = 0, sc = 0;
-    for (let i = 0; i < ww * wh; i++) {
-      if (!unknown[i]) { const idx = i * 4; sr += data[idx]; sg += data[idx + 1]; sb += data[idx + 2]; sc++; }
-    }
-    const avgR = sc ? sr / sc : 220, avgG = sc ? sg / sc : 220, avgB = sc ? sb / sc : 220;
-    for (let i = 0; i < ww * wh; i++) {
-      if (unknown[i]) { const idx = i * 4; data[idx] = avgR; data[idx + 1] = avgG; data[idx + 2] = avgB; }
-    }
-
-    const ITERS = 120;
-    for (let iter = 0; iter < ITERS; iter++) {
-      for (let y = 0; y < wh; y++) {
-        for (let x = 0; x < ww; x++) {
-          const i = y * ww + x;
-          if (!unknown[i]) continue;
-          let cr = 0, cg = 0, cb = 0, cnt = 0;
-          if (x > 0) { const j = (i - 1) * 4; cr += data[j]; cg += data[j + 1]; cb += data[j + 2]; cnt++; }
-          if (x < ww - 1) { const j = (i + 1) * 4; cr += data[j]; cg += data[j + 1]; cb += data[j + 2]; cnt++; }
-          if (y > 0) { const j = (i - ww) * 4; cr += data[j]; cg += data[j + 1]; cb += data[j + 2]; cnt++; }
-          if (y < wh - 1) { const j = (i + ww) * 4; cr += data[j]; cg += data[j + 1]; cb += data[j + 2]; cnt++; }
-          if (!cnt) continue;
-          const idx = i * 4;
-          data[idx] = cr / cnt; data[idx + 1] = cg / cnt; data[idx + 2] = cb / cnt;
-        }
-      }
-    }
-
+    inpaintMaskedRegion(imgData, ww, wh, unknown);
     sctx.putImageData(imgData, 0, 0);
 
     const octx = out.getContext('2d');
@@ -582,10 +715,36 @@
     return out;
   }
 
+  function computeSmartFill(px, py, pw, ph) {
+    const out = document.createElement('canvas');
+    out.width = Math.max(1, Math.round(pw));
+    out.height = Math.max(1, Math.round(ph));
+
+    const base = document.createElement('canvas');
+    base.width = canvas.width; base.height = canvas.height;
+    const bctx = base.getContext('2d', { willReadFrequently: true });
+    const rect = getCropRect();
+    bctx.drawImage(img, rect.sx, rect.sy, rect.sw, rect.sh, 0, 0, canvas.width, canvas.height);
+
+    let imgData;
+    try {
+      imgData = bctx.getImageData(Math.round(px), Math.round(py), out.width, out.height);
+    } catch (e) {
+      return out; // CORS — пустой канвас
+    }
+
+    const mask = buildLetterMask(imgData, out.width, out.height);
+    if (!mask) return computeFullRectInpaint(px, py, pw, ph); // букв не нашли — старый честный фолбэк
+
+    inpaintMaskedRegion(imgData, out.width, out.height, mask);
+    out.getContext('2d').putImageData(imgData, 0, 0);
+    return out;
+  }
+
   function ensurePatchFill(p, x, y, w, h) {
     const sig = `${x},${y},${w},${h},${cropMode}`;
     if (p._fillCache && p._fillCache.sig === sig) return p._fillCache.canvas;
-    const tex = computeInpaint(x, y, w, h);
+    const tex = computeSmartFill(x, y, w, h);
     p._fillCache = { sig, canvas: tex };
     return tex;
   }
@@ -1111,7 +1270,7 @@
         p.fillColor = hex;
         p.manualColor = true;
         patchFillColor.value = hex;
-        patchSmartFillBtn.style.display = 'inline-block';
+        updatePatchFillUI(p);
         render();
       }
       pipetteMode = false;

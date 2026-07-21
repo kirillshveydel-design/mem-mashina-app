@@ -349,6 +349,18 @@ header.topbar nav [data-tab].active {
   font-weight: 600;
 }
 
+/* --- Ссылка-переключатель («Криво? Настроить цвет вручную») --- */
+.link-btn {
+  background: none;
+  border: none;
+  color: var(--muted);
+  text-decoration: underline;
+  padding: 2px 0;
+  font-size: 12px;
+  cursor: pointer;
+}
+.link-btn:hover { color: var(--text); border-color: transparent; }
+
 /* --- Кнопка выхода из редактора (крестик в углу) --- */
 .editor-close-btn {
   position: absolute;
