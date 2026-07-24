@@ -14,6 +14,37 @@
   let img = null;
   let origSrc = null; // исходная картинка без подписей (для Трофеев)
   let sourceRef = null; // откуда пришла картинка — по нему опознаётся формат шаблона
+  let sessionStartedAt = null; // момент загрузки текущей картинки — точка отсчёта секундомера
+
+  // Секундомер «от фото до скачивания». Не для отчётности перед кем-то — чтобы честно видеть,
+  // действительно ли путь короче трёх минут, а не казаться таким на глаз. Копим последние 50
+  // замеров и показываем медиану: одно быстрое или одно медленное не должно врать о типичном пути.
+  const TIMING_KEY = 'mm_timing_v1';
+  function loadTimings() {
+    try { return JSON.parse(localStorage.getItem(TIMING_KEY) || '[]'); } catch (e) { return []; }
+  }
+  function median(arr) {
+    if (!arr.length) return null;
+    const s = arr.slice().sort((a, b) => a - b);
+    const mid = Math.floor(s.length / 2);
+    return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+  }
+  function fmtDuration(ms) {
+    const s = Math.round(ms / 1000);
+    return s < 60 ? `${s}с` : `${Math.floor(s / 60)}м ${s % 60}с`;
+  }
+  function logTiming() {
+    if (!sessionStartedAt) return;
+    const elapsed = Date.now() - sessionStartedAt;
+    const list = loadTimings();
+    list.push(elapsed);
+    if (list.length > 50) list.shift();
+    localStorage.setItem(TIMING_KEY, JSON.stringify(list));
+    const m = median(list);
+    toast(`⏱ Этот мем — ${fmtDuration(elapsed)}. Медиана за последние ${list.length}: ${fmtDuration(m)}`);
+    // Одна попытка = одно измерение: следующее действие уже новая картинка или тот же файл заново.
+    sessionStartedAt = null;
+  }
   let cropMode = null; // null | 'square' | 'portrait'
   const MAX_DIM = 1600;
 
@@ -1002,6 +1033,7 @@
         // Путь исходника нужен, чтобы опознать шаблон из офлайн-пака и подставить его формат.
         // origSrc после улучшения — это dataURL, по нему шаблон уже не узнать.
         sourceRef = src;
+        sessionStartedAt = Date.now();
         cropMode = null;
         stripTop = 0;
         stripBottom = 0;
@@ -1612,7 +1644,7 @@
     link.download = 'mem-' + Date.now() + '.png';
     link.href = canvas.toDataURL('image/png');
     link.click();
-    toast('PNG скачан');
+    logTiming();
   });
 
   function resetEditor() {
@@ -1677,6 +1709,10 @@
     const topic = prompt('Тема (для памяти):', '') || '';
     const activeChip = document.querySelector('#nicheChips .active');
     const niche = activeChip ? activeChip.dataset.niche : 'all';
+    // Формат картинки (Дрейк, мозги...) — ключ, по которому позже считается, какие форматы
+    // реально приносят результат. У своего фото формата нет, тогда пишем 'freeform'.
+    const fmt = currentFormat();
+    const formatKey = fmt ? fmt.key : 'freeform';
     canvas.toBlob(async blob => {
       if (!blob) { toast('Не удалось собрать PNG'); return; }
       await mmAdd('queue', {
@@ -1685,10 +1721,11 @@
         // Для дедупа в published-log достаточно первых двух подписей (историческая пара верх/низ).
         topText: captions[0] ? captions[0].text : '',
         bottomText: captions[1] ? captions[1].text : '',
-        niche,
+        niche, formatKey,
         published: false
       });
       toast('Добавлено в очередь постов');
+      logTiming();
     }, 'image/png');
   });
 

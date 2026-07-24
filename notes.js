@@ -21,6 +21,7 @@
     const topics = [];
     engine.REAL_NICHES.forEach(niche => {
       engine.curatedForNiche(niche).concat(engine.generatedForNiche(niche)).forEach(([top, bottom]) => {
+        const { toSentence, stripScaffolding } = window.__memTextUtils;
         const text = toSentence(stripScaffolding(top)) + ' — ' + toSentence(stripScaffolding(bottom));
         if (seen.has(text)) return;
         seen.add(text);
@@ -28,25 +29,6 @@
       });
     });
     return topics;
-  }
-
-  // «РЕЗЮМЕ:» / «РЕАЛЬНОСТЬ:» / «Я:» и кавычки — это разметка мема, она нужна на картинке.
-  // В теме для текстового поста они только мешают читать, поэтому срезаем.
-  function stripScaffolding(s) {
-    return s
-      .replace(/^(РЕЗЮМЕ|РЕАЛЬНОСТЬ|МИР|Я)\s*:\s*/u, '')
-      .replace(/^[«"']|[»"']$/gu, '')
-      .trim();
-  }
-
-  // Подписи в банке — в верхнем регистре (так они рисуются на картинке). Для темы это читается
-  // как крик, поэтому опускаем регистр и поднимаем заглавную в начале каждого предложения:
-  // многие подписи состоят из двух фраз через точку («Проверил. Дважды. Всё равно завернули»).
-  function toSentence(caps) {
-    return caps
-      .toLocaleLowerCase('ru-RU')
-      .replace(/(^|[.!?]\s+|^[«"']|[.!?]\s+[«"'])(\p{Ll})/gu,
-        (m, prefix, letter) => prefix + letter.toLocaleUpperCase('ru-RU'));
   }
 
   function load() {
@@ -103,7 +85,16 @@
     const niche = note.niche || 'all';
     const fitting = formats.list(niche).filter(f => f.count > 0);
     if (!fitting.length) { toast('Под эту идею формата не нашлось'); return; }
-    const pick = fitting[Math.floor(Math.random() * fitting.length)];
+    // Среди подходящих форматов чуть сильнее налегаем на тот, что реально приносит
+    // вовлечённость (см. stats.js) — без данных выбор остаётся равномерным случайным.
+    let pick;
+    if (window.__memStats) {
+      const keys = fitting.map(f => f.key);
+      const pickedKey = window.__memStats.weightedPick(keys, window.__memStats.formatScores());
+      pick = fitting.find(f => f.key === pickedKey) || fitting[0];
+    } else {
+      pick = fitting[Math.floor(Math.random() * fitting.length)];
+    }
     const fmt = formats.formatFor(pick.key);
     const texts = formats.nextVariant(pick.key, niche);
     if (!texts) { toast('Заготовки для этого формата кончились'); return; }

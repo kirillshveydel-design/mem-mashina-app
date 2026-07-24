@@ -103,6 +103,7 @@
               text_top: item.topText || '',
               text_bottom: item.bottomText || '',
               niche: item.niche || 'all',
+              memFormatKey: item.formatKey || 'freeform',
               slot: item.slot, topic: item.topic, format: 'photo'
             });
           } else if (item.kind === 'video' && item.eventText) {

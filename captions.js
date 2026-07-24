@@ -209,6 +209,17 @@
 
   let currentNiche = 'all';
 
+  // Когда выбрано «Все» и уже накопилось достаточно результатов (см. stats.js), 🎲 чуть
+  // сильнее налегает на нишу, которая реально приносит вовлечённость — вместо честного
+  // равномерного микса. Без данных (или с выбранной конкретной нишей) ведёт себя как раньше.
+  function resolveNiche(niche) {
+    if (niche !== 'all' || !window.__memStats) return niche;
+    const scores = window.__memStats.nicheScores();
+    const anyTrusted = REAL_NICHES.some(n => window.__memStats.isTrusted(scores[n]));
+    if (!anyTrusted) return niche;
+    return window.__memStats.weightedPick(REAL_NICHES, scores) || niche;
+  }
+
   const captionRollBtn = document.getElementById('captionRollBtn');
   const eventModePanel = document.getElementById('eventModePanel');
 
@@ -223,7 +234,17 @@
   });
 
   // --- Счётчик на чипах: сколько неопубликованных вариантов осталось в нише ---
+  // Плюс — если по нише накопилось хотя бы 3 результата (см. stats.js), лучшая по
+  // вовлечённости ниша получает значок 🔥. Не догадка, а то же число, что решает 🎲.
   function refreshChipCounts() {
+    const scores = window.__memStats ? window.__memStats.nicheScores() : {};
+    let bestNiche = null, bestScore = -Infinity;
+    REAL_NICHES.forEach(n => {
+      const s = scores[n];
+      if (window.__memStats && window.__memStats.isTrusted(s) && s.score > bestScore) {
+        bestScore = s.score; bestNiche = n;
+      }
+    });
     REAL_NICHES.forEach(niche => {
       const total = curatedForNiche(niche).length + generatedForNiche(niche).length;
       const remaining = curatedPool(niche).length + generatedPool(niche).length;
@@ -238,9 +259,13 @@
       fracEl.textContent = `${remaining}`;
       const isLow = total > 0 && remaining / total <= 0.2;
       chip.classList.toggle('chip-low', isLow);
-      chip.title = isLow
+      chip.classList.toggle('chip-top', niche === bestNiche);
+      const s = scores[niche];
+      const scoreNote = s ? ` · средняя вовлечённость ${s.score.toFixed(1)} (n=${s.n})` : '';
+      chip.title = (isLow
         ? 'Комбинации в этой нише почти исчерпаны — попроси Claude в чате дополнить словари'
-        : `${remaining} неопубликованных вариантов из ${total}`;
+        : `${remaining} неопубликованных вариантов из ${total}`) + scoreNote
+        + (niche === bestNiche ? ' — лучшая ниша по опубликованным результатам' : '');
     });
   }
 
@@ -277,14 +302,15 @@
   window.__memMachineCaptions = { refreshChipCounts, generatedForNiche, curatedForNiche, REAL_NICHES, nextPair, syncFormat };
 
   captionRollBtn.addEventListener('click', () => {
+    const niche = resolveNiche(currentNiche);
     const fmt = window.__memMachine.currentFormat && window.__memMachine.currentFormat();
     if (fmt) {
-      const texts = window.__memFormats.nextVariant(fmt.key, currentNiche);
+      const texts = window.__memFormats.nextVariant(fmt.key, niche);
       if (!texts) { toast('Для этого формата в выбранной нише заготовок нет — переключи нишу'); return; }
       window.__memMachine.applyFormat(fmt, texts);
       return;
     }
-    const pair = nextPair(currentNiche);
+    const pair = nextPair(niche);
     if (!pair) { toast('В этой нише все варианты уже опубликованы — добавь свои или попроси дополнить словари'); return; }
     const [top, bottom] = pair;
     window.__memMachine.addCaptionPair(top, bottom);
