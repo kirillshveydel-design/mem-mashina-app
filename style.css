@@ -374,3 +374,44 @@ header.topbar nav [data-tab].active {
   line-height: 1;
   z-index: 5;
 }
+
+/* --- Секции панели фоторедактора (аккордеон по задачам) --- */
+.ed-section {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+  margin-bottom: 6px;
+}
+.ed-section > summary {
+  cursor: pointer;
+  padding: 9px 12px;
+  font-size: 14px;
+  font-weight: 600;
+  list-style: none;
+  user-select: none;
+  -webkit-user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ed-section > summary::-webkit-details-marker { display: none; }
+.ed-section > summary::after {
+  content: '▸';
+  margin-left: auto;
+  color: var(--muted);
+  transition: transform .15s;
+}
+.ed-section[open] > summary::after { transform: rotate(90deg); }
+.ed-section > summary:hover { color: var(--accent); }
+.ed-section[open] > summary { border-bottom: 1px solid var(--border); }
+.ed-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px 12px;
+}
+.ed-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 10px 0 6px;
+}
