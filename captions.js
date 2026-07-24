@@ -299,7 +299,7 @@
     }
   }
 
-  window.__memMachineCaptions = { refreshChipCounts, generatedForNiche, curatedForNiche, REAL_NICHES, nextPair, syncFormat };
+  window.__memMachineCaptions = { refreshChipCounts, generatedForNiche, curatedForNiche, REAL_NICHES, nextPair, syncFormat, buildEventDrafts };
 
   captionRollBtn.addEventListener('click', () => {
     const niche = resolveNiche(currentNiche);

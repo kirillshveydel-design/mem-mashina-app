@@ -386,6 +386,14 @@ header.topbar nav [data-tab].active {
   z-index: 5;
 }
 
+/* --- «Сегодня»: точка входа над dropzone — мем про свежий инфоповод, а не банк консервов --- */
+#todayCard { border-top: 3px solid var(--accent); }
+#todayCard .draft-card { padding: 10px; flex-wrap: wrap; }
+#todayCard .draft-card .top,
+#todayCard .draft-card .bottom { flex: 1 1 220px; min-width: 0; font-size: 13px; }
+#todayCard .draft-card .bottom { color: var(--muted); }
+#todayCard .draft-card button { flex: 0 0 auto; }
+
 /* --- Секции панели фоторедактора (аккордеон по задачам) --- */
 .ed-section {
   border: 1px solid var(--border);

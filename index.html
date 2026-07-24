@@ -34,6 +34,20 @@
 
   <!-- ===================== ФОТО ===================== -->
   <section id="tab-photo">
+    <!-- Точка входа — не банк готовых шуток, а сегодняшний день. Мем про свежий инфоповод
+         обгоняет мем из консервов почти всегда; банк ниже остаётся как запасной вариант,
+         когда сказать нечего. Работает и без загруженной картинки — тогда сама подбирает
+         подходящий двухслотовый шаблон (Дрейк / кот / trade offer). -->
+    <div class="card" id="todayCard">
+      <div style="font-size:16px; font-weight:700;">⚡ Сегодня</div>
+      <div class="muted" style="margin:2px 0 8px;">Что случилось — одной фразой. Дальше три готовых варианта.</div>
+      <div class="row">
+        <input type="text" id="todayInput" placeholder="Инфантино вручил Трампу медаль ФИФА" style="flex:1; min-width:200px;">
+        <button class="primary" id="todayRollBtn">Собрать 3 варианта</button>
+      </div>
+      <div id="todayResults" style="margin-top:8px;"></div>
+    </div>
+
     <div class="card" id="dropcard">
       <div class="dropzone" id="dropzone">
         Перетащи картинку сюда, вставь из буфера (Ctrl+V) или
@@ -479,6 +493,7 @@
 <script src="textutils.js"></script>
 <script src="editor.js"></script>
 <script src="captions.js"></script>
+<script src="today.js"></script>
 <script src="video.js"></script>
 <script src="templates.js"></script>
 <script src="queue.js"></script>
