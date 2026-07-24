@@ -12,17 +12,20 @@
   // шутки из банка подписей, и кнопка «Придумай за меня» возвращала то, что уже есть в 🎲.
   // Теперь темы собираются тем же комбинаторным движком (captions.js) и приводятся к виду
   // «заявка — приземление» одной строкой, пригодной как сырьё для вечернего текстового поста.
+  // Тема помнит нишу, из которой выросла. Это и есть связка «идея → картинка»: по нише
+  // подбирается формат мема, в котором такая шутка нормально живёт.
   function topicPool() {
     const engine = window.__memMachineCaptions;
     if (!engine) return [];
-    const pairs = engine.REAL_NICHES.flatMap(n => engine.curatedForNiche(n).concat(engine.generatedForNiche(n)));
     const seen = new Set();
     const topics = [];
-    pairs.forEach(([top, bottom]) => {
-      const text = toSentence(stripScaffolding(top)) + ' — ' + toSentence(stripScaffolding(bottom));
-      if (seen.has(text)) return;
-      seen.add(text);
-      topics.push(text);
+    engine.REAL_NICHES.forEach(niche => {
+      engine.curatedForNiche(niche).concat(engine.generatedForNiche(niche)).forEach(([top, bottom]) => {
+        const text = toSentence(stripScaffolding(top)) + ' — ' + toSentence(stripScaffolding(bottom));
+        if (seen.has(text)) return;
+        seen.add(text);
+        topics.push({ text, niche });
+      });
     });
     return topics;
   }
@@ -73,8 +76,10 @@
       row.innerHTML = `
         <div class="note-text">${n.text}</div>
         <div class="note-date muted">${fmtDate(n.ts)}</div>
+        <button class="note-to-meme" title="Подобрать формат мема под эту идею и открыть в редакторе">🖼</button>
         <button class="note-publish" title="Отметить опубликованной — больше не предлагать">✅</button>
         <button class="note-del">✕</button>`;
+      row.querySelector('.note-to-meme').addEventListener('click', () => toMeme(n));
       row.querySelector('.note-publish').addEventListener('click', () => {
         mmPublishedAdd({ type: 'topic', text: n.text });
         save(load().filter(x => x.id !== n.id));
@@ -87,6 +92,26 @@
       });
       list.appendChild(row);
     });
+  }
+
+  // Идея → картинка. Ниша темы известна (она унаследована от пары, из которой тема выросла),
+  // поэтому подбираем формат, у которого в этой нише есть заготовки, и открываем его собранным.
+  // Тема остаётся в блокноте: она задаёт, о чём шутить, а формат — как это показать.
+  function toMeme(note) {
+    const formats = window.__memFormats;
+    if (!formats) { toast('Форматы не загрузились'); return; }
+    const niche = note.niche || 'all';
+    const fitting = formats.list(niche).filter(f => f.count > 0);
+    if (!fitting.length) { toast('Под эту идею формата не нашлось'); return; }
+    const pick = fitting[Math.floor(Math.random() * fitting.length)];
+    const fmt = formats.formatFor(pick.key);
+    const texts = formats.nextVariant(pick.key, niche);
+    if (!texts) { toast('Заготовки для этого формата кончились'); return; }
+    window.mmSwitchTab('photo');
+    window.__memMachine.loadImageFromSource('templates-pack/' + pick.key, () => {
+      window.__memMachine.applyFormat(fmt, texts);
+    });
+    toast(`Формат «${fmt.title}» — ${fmt.hint}`);
   }
 
   function addNote() {
@@ -115,12 +140,12 @@
     // Не предлагаем то, что уже опубликовано, и то, что уже лежит в блокноте — иначе кнопка
     // начинает возвращать одно и то же при повторных нажатиях.
     const inNotebook = new Set(load().map(n => n.text));
-    const available = topicPool().filter(text => !mmPublishedHasTopic(text) && !inNotebook.has(text));
+    const available = topicPool().filter(t => !mmPublishedHasTopic(t.text) && !inNotebook.has(t.text));
     if (!available.length) { toast('Свежих тем не осталось — попроси Claude дополнить словари'); return; }
     const picked = shuffle(available).slice(0, 5);
     const notes = load();
     const now = Date.now();
-    picked.forEach((text, i) => notes.push({ id: now + i + Math.random(), text, ts: now + i }));
+    picked.forEach((t, i) => notes.push({ id: now + i + Math.random(), text: t.text, niche: t.niche, ts: now + i }));
     save(notes);
     render();
     refreshBankStatus();
@@ -133,7 +158,7 @@
     if (!el) return;
     const all = topicPool();
     const total = all.length;
-    const remaining = all.filter(text => !mmPublishedHasTopic(text)).length;
+    const remaining = all.filter(t => !mmPublishedHasTopic(t.text)).length;
     el.textContent = `Темы: осталось ${remaining}/${total} неопубликованных`;
     const isLow = total > 0 && remaining / total <= 0.2;
     el.classList.toggle('chip-low', isLow);

@@ -245,9 +245,45 @@
   }
 
   refreshChipCounts();
-  window.__memMachineCaptions = { refreshChipCounts, generatedForNiche, curatedForNiche, REAL_NICHES, nextPair };
+
+  // --- Кнопка 🎲 знает, какой формат сейчас открыт ---
+  // На своём фото это по-прежнему «верх/низ». Но если открыт шаблон с рецептом (Дрейк,
+  // мозги, план Грю), кнопка собирает шутку нужной формы и раскладывает её по слотам
+  // картинки — а не кидает две строки поверх лица, как раньше.
+  const formatHint = document.getElementById('formatHint');
+
+  const plural = (n, one, few, many) => {
+    const m10 = n % 10, m100 = n % 100;
+    if (m10 === 1 && m100 !== 11) return one;
+    if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
+    return many;
+  };
+
+  function syncFormat() {
+    const fmt = window.__memMachine && window.__memMachine.currentFormat
+      ? window.__memMachine.currentFormat()
+      : null;
+    if (fmt) {
+      captionRollBtn.textContent = `🎲 Собрать мем: ${fmt.title}`;
+      const n = fmt.slots.length;
+      formatHint.textContent = `Формат «${fmt.title}» — ${fmt.hint}. Текст встанет в ${n} ${plural(n, 'готовое место', 'готовых места', 'готовых мест')} на картинке.`;
+      formatHint.style.display = 'block';
+    } else {
+      captionRollBtn.textContent = '🎲 Подпись';
+      formatHint.style.display = 'none';
+    }
+  }
+
+  window.__memMachineCaptions = { refreshChipCounts, generatedForNiche, curatedForNiche, REAL_NICHES, nextPair, syncFormat };
 
   captionRollBtn.addEventListener('click', () => {
+    const fmt = window.__memMachine.currentFormat && window.__memMachine.currentFormat();
+    if (fmt) {
+      const texts = window.__memFormats.nextVariant(fmt.key, currentNiche);
+      if (!texts) { toast('Для этого формата в выбранной нише заготовок нет — переключи нишу'); return; }
+      window.__memMachine.applyFormat(fmt, texts);
+      return;
+    }
     const pair = nextPair(currentNiche);
     if (!pair) { toast('В этой нише все варианты уже опубликованы — добавь свои или попроси дополнить словари'); return; }
     const [top, bottom] = pair;

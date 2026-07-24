@@ -13,6 +13,7 @@
 
   let img = null;
   let origSrc = null; // исходная картинка без подписей (для Трофеев)
+  let sourceRef = null; // откуда пришла картинка — по нему опознаётся формат шаблона
   let cropMode = null; // null | 'square' | 'portrait'
   const MAX_DIM = 1600;
 
@@ -35,15 +36,20 @@
     return captions.find(c => c.id === selectedCaptionId) || null;
   }
 
-  function newCaption(text, x, y) {
+  // opts переопределяет вид подписи — этим пользуются форматы мемов, где у каждого слота
+  // свой кегль, цвет и своя ширина переноса (текст в белом поле Дрейка не должен вылезать
+  // на картинку, поэтому maxW у него сильно меньше дефолтных 0.92 ширины холста).
+  function newCaption(text, x, y, opts) {
+    const o = opts || {};
     return {
       id: nextCaptionId++,
       text: text || 'НОВАЯ ПОДПИСЬ',
       x: x != null ? x : 0.5,
       y: y != null ? y : Math.min(0.85, 0.15 + captions.length * 0.12),
-      fontSize: 46,
-      color: '#ffffff',
-      stroke: '#000000',
+      fontSize: o.fontSize != null ? o.fontSize : 46,
+      color: o.color || '#ffffff',
+      stroke: o.stroke || '#000000',
+      maxW: o.maxW != null ? o.maxW : 0.92,
       caps: true,
       plate: false,
       plateColor: '#ffffff'
@@ -64,8 +70,8 @@
     render();
   }
 
-  function addCaption(text, x, y) {
-    const cap = newCaption(text, x, y);
+  function addCaption(text, x, y, opts) {
+    const cap = newCaption(text, x, y, opts);
     captions.push(cap);
     selectCaption(cap.id);
     return cap;
@@ -76,6 +82,28 @@
   function addCaptionPair(top, bottom) {
     addCaption(top, 0.5, Math.min(0.85, 0.15 + captions.length * 0.12));
     addCaption(bottom, 0.5, Math.min(0.9, 0.15 + captions.length * 0.12));
+  }
+
+  // Раскладывает набор реплик по слотам формата: каждая реплика встаёт в свою дырку на
+  // картинке со своим кеглем и цветом. Старые подписи стираются — формат задаёт всю
+  // композицию целиком, дописывать к нему чужие строки бессмысленно.
+  function applyFormat(fmt, texts) {
+    captions = [];
+    selectedCaptionId = null;
+    fmt.slots.forEach((slot, i) => {
+      const text = texts[i];
+      if (!text) return;
+      captions.push(newCaption(text, slot.x, slot.y, slot));
+    });
+    selectedCaptionId = captions.length ? captions[0].id : null;
+    syncCaptionEditor();
+    renderCaptionList();
+    render();
+  }
+
+  // Формат текущей картинки — или null, если это своё фото / шаблон без рецепта.
+  function currentFormat() {
+    return window.__memFormats ? window.__memFormats.formatFor(sourceRef) : null;
   }
 
   function deleteCaption(id) {
@@ -971,6 +999,9 @@
       image.onload = () => {
         img = image;
         origSrc = enhancedSrc;
+        // Путь исходника нужен, чтобы опознать шаблон из офлайн-пака и подставить его формат.
+        // origSrc после улучшения — это dataURL, по нему шаблон уже не узнать.
+        sourceRef = src;
         cropMode = null;
         stripTop = 0;
         stripBottom = 0;
@@ -992,6 +1023,8 @@
         renderPatchList();
         syncPatchEditor();
         render();
+        // Кнопка 🎲 подстраивается под формат новой картинки (у Дрейка своя шутка, у мозгов своя).
+        if (window.__memMachineCaptions) window.__memMachineCaptions.syncFormat();
       };
       image.onerror = () => toast('Не удалось загрузить картинку');
       image.src = enhancedSrc;
@@ -1257,7 +1290,7 @@
     if (!cap.text) return null;
     const text = cap.caps ? cap.text.toUpperCase() : cap.text;
     const fontPx = Math.round(Number(cap.fontSize) * (canvas.width / 700));
-    const maxWidth = canvas.width * 0.92;
+    const maxWidth = canvas.width * (cap.maxW != null ? cap.maxW : 0.92);
     const lines = wrapLines(text, maxWidth, fontPx);
     const lineHeight = fontPx * 1.15;
     const blockHeight = lineHeight * lines.length;
@@ -1675,5 +1708,5 @@
   renderCaptionList();
 
   // Экспонируем для межтабового моста (templates.js/queue.js/captions.js) и программных тестов
-  window.__memMachine = { loadImageFromSource, loadTrophy, addCaption, addCaptionPair, render, canvas };
+  window.__memMachine = { loadImageFromSource, loadTrophy, addCaption, addCaptionPair, applyFormat, currentFormat, render, canvas };
 })();

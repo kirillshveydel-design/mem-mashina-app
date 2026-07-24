@@ -415,3 +415,28 @@ header.topbar nav [data-tab].active {
   background: var(--border);
   margin: 10px 0 6px;
 }
+
+/* --- Подсказка о формате открытого шаблона (под кнопкой 🎲) --- */
+.format-hint {
+  margin-top: 6px;
+  padding: 6px 8px;
+  border-left: 2px solid var(--accent);
+  background: var(--panel);
+  border-radius: 0 6px 6px 0;
+  line-height: 1.35;
+}
+
+/* --- Значок «есть готовый рецепт» на карточке шаблона --- */
+.tpl { position: relative; }
+.tpl .tpl-format {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 999px;
+  pointer-events: none;
+}

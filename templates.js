@@ -40,7 +40,11 @@
         const div = document.createElement('div');
         div.className = 'tpl';
         const src = 'templates-pack/' + it.file;
-        div.innerHTML = `<img src="${src}" loading="lazy" alt="${it.name}"><div class="name">${it.name}</div>`;
+        // У части шаблонов есть рецепт: своя геометрия слотов и своя форма шутки.
+        // Помечаем их — по такому шаблону 🎲 соберёт мем целиком, а не выдаст две строки.
+        const fmt = window.__memFormats && window.__memFormats.formatFor(src);
+        const badge = fmt ? `<div class="tpl-format">🎲 ${fmt.title}</div>` : '';
+        div.innerHTML = `${badge}<img src="${src}" loading="lazy" alt="${it.name}"><div class="name">${it.name}</div>`;
         div.addEventListener('click', () => openInEditor(src));
         packGrid.appendChild(div);
       });
