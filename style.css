@@ -114,6 +114,12 @@ input[type="text"], input[type="number"], input[type="color"], input[type="range
 
 label { font-size: 13px; color: var(--muted); display: block; margin-bottom: 4px; }
 
+/* Нативный чекбокс рендерится ~13px и в некоторых браузерах не растягивается по width —
+   реальный тач-таргет здесь его <label> (клик по подписи тоже переключает чекбокс),
+   поэтому расширяем padding самого label, а не полагаемся на размер квадратика. */
+input[type="checkbox"] { width: 20px; height: 20px; cursor: pointer; }
+label:has(> input[type="checkbox"]) { padding: 6px 4px; cursor: pointer; }
+
 .card {
   background: var(--panel);
   border: 1px solid var(--border);
@@ -366,15 +372,16 @@ header.topbar nav [data-tab].active {
 .link-btn:hover { color: var(--text); border-color: transparent; }
 
 /* --- Кнопка выхода из редактора (крестик в углу) --- */
+/* 44px — минимальный комфортный тач-таргет (Apple HIG/Material), было 32px */
 .editor-close-btn {
   position: absolute;
   top: 10px;
   right: 10px;
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   padding: 0;
   border-radius: 50%;
-  font-size: 16px;
+  font-size: 18px;
   line-height: 1;
   z-index: 5;
 }

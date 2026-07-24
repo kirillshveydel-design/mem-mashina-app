@@ -1,5 +1,5 @@
 // Service worker «Мем-машина» — офлайн-кэш SPA + офлайн-пак шаблонов
-const CACHE_NAME = 'mem-mashina-v26';
+const CACHE_NAME = 'mem-mashina-v27';
 const ASSETS = [
   './',
   './index.html',
