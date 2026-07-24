@@ -8,23 +8,43 @@
   const empty = document.getElementById('notesEmpty');
   const ideaGenBtn = document.getElementById('ideaGenBtn');
 
-  const TOPIC_BANK = [
-    'Агент сделал мою работу, пока я выбирал шрифт',
-    'Клиент спросил «а точно агент не наврёт?» — а я не знаю',
-    'Таможня завернула груз из-за запятой в инвойсе',
-    'Написал «давай синергию» — ответили через полгода',
-    'Партнёр пропал после предоплаты',
-    'Попросил агента починить баг — он переписал всё',
-    'Инвестор лайкнул пост, оказался бот',
-    'Срок доставки 14 дней, идёт 47-й',
-    'Сказал маме, что я вайбкодер — она молчит',
-    'Продакшн упал ночью, починил агент, я спал',
-    'На нетворкинге обменялся визитками — никто не пишет',
-    'Курс вырос, маржа испарилась',
-    'Клиент: «что с грузом?» — груз в пути, где — тайна',
-    'Записал цели на год — не узнаю этого человека',
-    'Ревью кода делает агент, я при нём стажёр'
-  ];
+  // Темы больше не хранятся отдельным списком: раньше он на 13 из 15 позиций дословно повторял
+  // шутки из банка подписей, и кнопка «Придумай за меня» возвращала то, что уже есть в 🎲.
+  // Теперь темы собираются тем же комбинаторным движком (captions.js) и приводятся к виду
+  // «заявка — приземление» одной строкой, пригодной как сырьё для вечернего текстового поста.
+  function topicPool() {
+    const engine = window.__memMachineCaptions;
+    if (!engine) return [];
+    const pairs = engine.REAL_NICHES.flatMap(n => engine.curatedForNiche(n).concat(engine.generatedForNiche(n)));
+    const seen = new Set();
+    const topics = [];
+    pairs.forEach(([top, bottom]) => {
+      const text = toSentence(stripScaffolding(top)) + ' — ' + toSentence(stripScaffolding(bottom));
+      if (seen.has(text)) return;
+      seen.add(text);
+      topics.push(text);
+    });
+    return topics;
+  }
+
+  // «РЕЗЮМЕ:» / «РЕАЛЬНОСТЬ:» / «Я:» и кавычки — это разметка мема, она нужна на картинке.
+  // В теме для текстового поста они только мешают читать, поэтому срезаем.
+  function stripScaffolding(s) {
+    return s
+      .replace(/^(РЕЗЮМЕ|РЕАЛЬНОСТЬ|МИР|Я)\s*:\s*/u, '')
+      .replace(/^[«"']|[»"']$/gu, '')
+      .trim();
+  }
+
+  // Подписи в банке — в верхнем регистре (так они рисуются на картинке). Для темы это читается
+  // как крик, поэтому опускаем регистр и поднимаем заглавную в начале каждого предложения:
+  // многие подписи состоят из двух фраз через точку («Проверил. Дважды. Всё равно завернули»).
+  function toSentence(caps) {
+    return caps
+      .toLocaleLowerCase('ru-RU')
+      .replace(/(^|[.!?]\s+|^[«"']|[.!?]\s+[«"'])(\p{Ll})/gu,
+        (m, prefix, letter) => prefix + letter.toLocaleUpperCase('ru-RU'));
+  }
 
   function load() {
     try {
@@ -92,8 +112,11 @@
   }
 
   ideaGenBtn.addEventListener('click', () => {
-    const available = TOPIC_BANK.filter(text => !mmPublishedHasTopic(text));
-    if (!available.length) { toast('Все темы банка уже опубликованы'); return; }
+    // Не предлагаем то, что уже опубликовано, и то, что уже лежит в блокноте — иначе кнопка
+    // начинает возвращать одно и то же при повторных нажатиях.
+    const inNotebook = new Set(load().map(n => n.text));
+    const available = topicPool().filter(text => !mmPublishedHasTopic(text) && !inNotebook.has(text));
+    if (!available.length) { toast('Свежих тем не осталось — попроси Claude дополнить словари'); return; }
     const picked = shuffle(available).slice(0, 5);
     const notes = load();
     const now = Date.now();
@@ -104,17 +127,18 @@
     toast(`Добавлено ${picked.length} тем`);
   });
 
-  // --- Индикатор старения банка тем ---
+  // --- Сколько тем ещё не опубликовано ---
   function refreshBankStatus() {
     const el = document.getElementById('topicBankStatus');
     if (!el) return;
-    const total = TOPIC_BANK.length;
-    const remaining = TOPIC_BANK.filter(text => !mmPublishedHasTopic(text)).length;
+    const all = topicPool();
+    const total = all.length;
+    const remaining = all.filter(text => !mmPublishedHasTopic(text)).length;
     el.textContent = `Темы: осталось ${remaining}/${total} неопубликованных`;
     const isLow = total > 0 && remaining / total <= 0.2;
     el.classList.toggle('chip-low', isLow);
     el.title = isLow
-      ? 'Банк почти исчерпан — попроси Claude в чате дополнить его новыми темами на основе того, что реально залетело'
+      ? 'Темы почти исчерпаны — попроси Claude в чате дополнить словари новыми формулировками'
       : '';
   }
   refreshBankStatus();
