@@ -44,7 +44,7 @@
         // Помечаем их — по такому шаблону 🎲 соберёт мем целиком, а не выдаст две строки.
         const fmt = window.__memFormats && window.__memFormats.formatFor(src);
         const badge = fmt ? `<div class="tpl-format">🎲 ${fmt.title}</div>` : '';
-        div.innerHTML = `${badge}<img src="${src}" loading="lazy" alt="${it.name}"><div class="name">${it.name}</div>`;
+        div.innerHTML = `${badge}<img src="${mmEscapeHtml(src)}" loading="lazy" alt="${mmEscapeHtml(it.name)}"><div class="name">${mmEscapeHtml(it.name)}</div>`;
         div.addEventListener('click', () => openInEditor(src));
         packGrid.appendChild(div);
       });
@@ -68,7 +68,7 @@
       memes.forEach(m => {
         const div = document.createElement('div');
         div.className = 'tpl';
-        div.innerHTML = `<img src="${m.url}" loading="lazy" alt="${m.name}"><div class="name">${m.name}</div>`;
+        div.innerHTML = `<img src="${mmEscapeHtml(m.url)}" loading="lazy" alt="${mmEscapeHtml(m.name)}"><div class="name">${mmEscapeHtml(m.name)}</div>`;
         div.addEventListener('click', async () => {
           statusText.textContent = 'Открываю шаблон…';
           const dataUrl = await toDataURL(m.url);
@@ -150,7 +150,7 @@
     items.forEach(it => {
       const div = document.createElement('div');
       div.className = 'tpl';
-      div.innerHTML = `<img src="${it.url}" loading="lazy" alt="${it.name}"><div class="name">${it.name}</div>`;
+      div.innerHTML = `<img src="${mmEscapeHtml(it.url)}" loading="lazy" alt="${mmEscapeHtml(it.name)}"><div class="name">${mmEscapeHtml(it.name)}</div>`;
       div.addEventListener('click', async () => {
         statusText.textContent = 'Открываю шаблон…';
         const dataUrl = await toDataURL(it.url);

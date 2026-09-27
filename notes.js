@@ -56,7 +56,7 @@
       const row = document.createElement('div');
       row.className = 'note-row';
       row.innerHTML = `
-        <div class="note-text">${n.text}</div>
+        <div class="note-text">${mmEscapeHtml(n.text)}</div>
         <div class="note-date muted">${fmtDate(n.ts)}</div>
         <button class="note-to-meme" title="Подобрать формат мема под эту идею и открыть в редакторе">🖼</button>
         <button class="note-publish" title="Отметить опубликованной — больше не предлагать">✅</button>
@@ -212,7 +212,7 @@
     const container = document.getElementById('customCaptionsList');
     const items = loadCustomCaptions();
     container.innerHTML = items.length
-      ? items.map(c => `<div class="muted" style="padding:4px 0; border-bottom:1px solid var(--border);">[${c.niche}] ${c.top} / ${c.bottom}</div>`).join('')
+      ? items.map(c => `<div class="muted" style="padding:4px 0; border-bottom:1px solid var(--border);">[${mmEscapeHtml(c.niche)}] ${mmEscapeHtml(c.top)} / ${mmEscapeHtml(c.bottom)}</div>`).join('')
       : '<div class="muted">Custom-банк пуст.</div>';
   }
 

@@ -48,8 +48,8 @@
       const row = document.createElement('div');
       row.className = 'draft-card';
       row.innerHTML = `
-        <div class="top">${d.top}</div>
-        <div class="bottom">${d.bottom}</div>
+        <div class="top">${mmEscapeHtml(d.top)}</div>
+        <div class="bottom">${mmEscapeHtml(d.bottom)}</div>
         <button style="margin-top:6px;">Использовать</button>`;
       row.querySelector('button').addEventListener('click', () => useDraft(d));
       results.appendChild(row);

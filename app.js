@@ -9,6 +9,18 @@ function toast(msg, ms = 2400) {
   toast._t = setTimeout(() => { el.style.display = 'none'; }, ms);
 }
 
+// Всё, что приходит не из кода (заголовки мемов из Lemmy/Imgflip, заметки, подписи, темы),
+// вставляется в innerHTML только через это экранирование: заголовок поста в Lemmy пишет
+// кто угодно, и без него строка вида <img onerror=...> исполнилась бы у нас на странице.
+function mmEscapeHtml(value) {
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function fitFont(candidates) {
   // Возвращает первый доступный шрифт из списка через document.fonts.check,
   // с фолбэком на дефолтный набор, если API недоступен.

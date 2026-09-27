@@ -20,7 +20,7 @@
         <input type="number" class="res-comments" placeholder="Комменты" style="width:80px;" value="${entry.comments != null ? entry.comments : ''}">
         <input type="number" class="res-reposts" placeholder="Репосты" style="width:80px;" value="${entry.reposts != null ? entry.reposts : ''}">
       </div>
-      <input type="text" class="res-note" placeholder="Заметка (например: залетело из-за цифры в панчлайне)" style="width:100%; margin-top:6px;" value="${entry.note || ''}">
+      <input type="text" class="res-note" placeholder="Заметка (например: залетело из-за цифры в панчлайне)" style="width:100%; margin-top:6px;" value="${mmEscapeHtml(entry.note || '')}">
       <button class="res-save" style="margin-top:6px;">Сохранить результат</button>`;
   }
 
@@ -77,8 +77,8 @@
         <div class="row" style="width:100%;">
           ${thumbHtml}
           <div class="info">
-            <div class="title">${item.published ? '✅ ' : ''}${item.kind === 'photo' ? '🖼️ Фото' : '🎬 Видео'} — ${fmtDate(item.plannedDate)} (${item.slot || '—'})</div>
-            <div class="muted">${item.topic || ''}</div>
+            <div class="title">${item.published ? '✅ ' : ''}${item.kind === 'photo' ? '🖼️ Фото' : '🎬 Видео'} — ${mmEscapeHtml(fmtDate(item.plannedDate))} (${mmEscapeHtml(item.slot || '—')})</div>
+            <div class="muted">${mmEscapeHtml(item.topic || '')}</div>
           </div>
           <div class="row">
             <button class="dlBtn">Скачать</button>
@@ -163,7 +163,7 @@
       row.style.borderBottom = '1px solid var(--border)';
       row.innerHTML = `
         <div class="row" style="justify-content:space-between; align-items:center;">
-          <div class="muted">${e.date_published} — ${label}${resultLabel}</div>
+          <div class="muted">${mmEscapeHtml(e.date_published)} — ${mmEscapeHtml(label)}${resultLabel}</div>
           <button class="hist-results-toggle">Внести результат</button>
         </div>
         <div class="hist-results-form" style="display:none;"></div>`;
@@ -210,10 +210,10 @@
       div.className = 'draft-card';
       if (item.kind === 'photo') {
         div.innerHTML = `
-          <img class="thumb" src="${item.imageDataUrl}">
+          <img class="thumb" src="${mmEscapeHtml(item.imageDataUrl)}">
           <div class="info">
             <div class="title">🖼️ Фото-трофей</div>
-            <div class="muted">${item.captions ? item.captions.map(c => c.text).filter(Boolean).join(' / ') : `${item.top || ''} / ${item.bottom || ''}`}</div>
+            <div class="muted">${mmEscapeHtml(item.captions ? item.captions.map(c => c.text).filter(Boolean).join(' / ') : `${item.top || ''} / ${item.bottom || ''}`)}</div>
           </div>
           <div class="row">
             <button class="useBtn">Открыть в редакторе</button>
@@ -228,7 +228,7 @@
           <div class="thumb" style="display:flex; align-items:center; justify-content:center; font-size:28px;">🎬</div>
           <div class="info">
             <div class="title">Видео-структура — ${item.badges.length} плашек</div>
-            <div class="muted">${item.eventText || ''}</div>
+            <div class="muted">${mmEscapeHtml(item.eventText || '')}</div>
           </div>
           <div class="row">
             <button class="useBtn">Открыть в видеоредакторе</button>

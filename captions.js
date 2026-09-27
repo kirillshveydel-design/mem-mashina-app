@@ -368,8 +368,8 @@
       row.style.padding = '8px';
       row.style.marginBottom = '6px';
       row.innerHTML = `
-        <div style="font-size:13px;">${d.top}</div>
-        <div style="font-size:13px; color:var(--muted);">${d.bottom}</div>
+        <div style="font-size:13px;">${mmEscapeHtml(d.top)}</div>
+        <div style="font-size:13px; color:var(--muted);">${mmEscapeHtml(d.bottom)}</div>
         <button style="margin-top:6px;">Использовать</button>`;
       row.querySelector('button').addEventListener('click', () => {
         window.__memMachine.addCaptionPair(d.top, d.bottom);
