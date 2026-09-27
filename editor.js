@@ -81,6 +81,9 @@
       color: o.color || '#ffffff',
       stroke: o.stroke || '#000000',
       maxW: o.maxW != null ? o.maxW : 0.92,
+      // generated = подпись поставил 🎲, а не человек. Повторный бросок заменяет только такие,
+      // поэтому ручные подписи и те, что человек уже поправил руками, переживают перебор вариантов.
+      generated: !!o.generated,
       caps: true,
       plate: false,
       plateColor: '#ffffff'
@@ -110,21 +113,30 @@
 
   // Используется генератором пар (🎲 Подпись / режим «Событие») — добавляет сразу два новых
   // независимых текста, не трогая уже существующие подписи на картинке.
+  // Пара из генератора — классический мем: одна строка у верхнего края, другая у нижнего.
+  // Раньше каждый бросок 🎲 добавлял ещё одну пару ниже предыдущей (3 броска = 6 надписей
+  // стопкой у верха). Теперь бросок заменяет прошлый сгенерированный вариант.
+  function removeGenerated() {
+    captions = captions.filter(c => !c.generated);
+  }
+
   function addCaptionPair(top, bottom) {
-    addCaption(top, 0.5, Math.min(0.85, 0.15 + captions.length * 0.12));
-    addCaption(bottom, 0.5, Math.min(0.9, 0.15 + captions.length * 0.12));
+    removeGenerated();
+    const first = newCaption(top, 0.5, 0.08, { generated: true });
+    captions.push(first, newCaption(bottom, 0.5, 0.92, { generated: true }));
+    selectCaption(first.id);
   }
 
   // Раскладывает набор реплик по слотам формата: каждая реплика встаёт в свою дырку на
   // картинке со своим кеглем и цветом. Старые подписи стираются — формат задаёт всю
   // композицию целиком, дописывать к нему чужие строки бессмысленно.
   function applyFormat(fmt, texts) {
-    captions = [];
+    removeGenerated();
     selectedCaptionId = null;
     fmt.slots.forEach((slot, i) => {
       const text = texts[i];
       if (!text) return;
-      captions.push(newCaption(text, slot.x, slot.y, slot));
+      captions.push(newCaption(text, slot.x, slot.y, { ...slot, generated: true }));
     });
     selectedCaptionId = captions.length ? captions[0].id : null;
     syncCaptionEditor();
@@ -148,7 +160,7 @@
   function renderCaptionList() {
     captionListEl.innerHTML = '';
     if (!captions.length) {
-      captionListEl.innerHTML = '<span class="muted">Подписей пока нет — жми «+ Добавить подпись» или 🎲</span>';
+      captionListEl.innerHTML = '<span class="muted">Подписей пока нет — жми «+ Добавить» или 🎲</span>';
       return;
     }
     captions.forEach(cap => {
@@ -191,7 +203,8 @@
       const cap = getSelectedCaption();
       if (!cap) return;
       cap[prop] = getVal(el);
-      if (prop === 'text') renderCaptionList();
+      // Человек поправил текст — подпись теперь его, следующий 🎲 её не заменит.
+      if (prop === 'text') { cap.generated = false; renderCaptionList(); }
       render();
     });
   });
@@ -1326,8 +1339,12 @@
     const lines = wrapLines(text, maxWidth, fontPx);
     const lineHeight = fontPx * 1.15;
     const blockHeight = lineHeight * lines.length;
-    const cx = cap.x * canvas.width;
-    const cy = cap.y * canvas.height;
+    // Центр подписи прижимается так, чтобы блок целиком оставался на картинке: длинная фраза
+    // у верхнего края раньше уходила строками за границу холста и обрезалась при экспорте.
+    const margin = fontPx * 0.3;
+    const clampTo = (v, half, size) => Math.min(size - half - margin, Math.max(half + margin, v));
+    let cx = cap.x * canvas.width;
+    const cy = clampTo(cap.y * canvas.height, blockHeight / 2, canvas.height);
     const startY = cy - blockHeight / 2 + lineHeight / 2;
 
     ctx.textAlign = 'center';
@@ -1336,6 +1353,7 @@
 
     let maxLineWidth = 0;
     lines.forEach(line => { maxLineWidth = Math.max(maxLineWidth, ctx.measureText(line).width); });
+    cx = clampTo(cx, maxLineWidth / 2, canvas.width);
 
     if (cap.plate) {
       const padX = fontPx * 0.35, padY = fontPx * 0.25;
