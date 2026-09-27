@@ -369,6 +369,30 @@
     {
       event: 'ПОЖАЛОВАЛСЯ, ЧТО НЕТ ВРЕМЕНИ',
       badges: ['Купи мой курс по тайм-менеджменту', 'Делегируй!', 'Вставай в 5 утра', 'Купи планнер', 'Найми ассистента', 'Просто сфокусируйся']
+    },
+    {
+      event: 'ЗАПОСТИЛ СКРИН ГРАФИКА РОСТА ПОДПИСЧИКОВ',
+      badges: ['Методичку продаёте?', 'А как вы набрали первую тысячу?', 'Го коллаб', 'Ламповый контент!', 'Продайте курс по контенту', 'Раскажите про алгоритмы']
+    },
+    {
+      event: 'НАПИСАЛ, ЧТО ГРУЗ ЗАСТРЯЛ НА ТАМОЖНЕ',
+      badges: ['Брокера посоветовать?', 'У меня такая же история была', 'Напишите в личку, помогу', 'А декларацию сами подавали?', 'Это классика, welcome to ВЭД', 'Растаможу за 20%']
+    },
+    {
+      event: 'ВЫЛОЖИЛ ФОТО С КОНФЕРЕНЦИИ',
+      badges: ['Го нетворкинг-созвон на неделе', 'Как раз тоже там был, не пересеклись!', 'Скиньте контакты спикеров', 'Оффтоп: а бейдж где брали', 'Го коллаб контент с ивента', 'Го кофе на следующей']
+    },
+    {
+      event: 'НАПИСАЛ, ЧТО ПЕРЕШЁЛ НА 4-ДНЕВНУЮ НЕДЕЛЮ',
+      badges: ['Как убедить начальника?', 'У нас такое не примут никогда', 'Это выгорание маскируется под тренд', 'А зарплату урезали?', 'Спишите методичку!', 'Я и на пятидневке не успеваю']
+    },
+    {
+      event: 'ПОКАЗАЛ СКРИН ПЕРВОГО ДОХОДА С ФРИЛАНСА',
+      badges: ['Научите!', 'А с чего начать вообще', 'Сколько часов в неделю уходит', 'Скиньте бриф на менторство', 'Го схантю вас в команду', 'Это же не так уж и много']
+    },
+    {
+      event: 'НАПИСАЛ ПРО НОВЫЙ ИИ-ИНСТРУМЕНТ ДЛЯ КОДА',
+      badges: ['А он заменит джунов?', 'Уже пробовал, гонит', 'А как у него с безопасностью', 'Го сравнение с прошлым инструментом', 'Продайте промпт', 'Подпишусь, если будет туториал']
     }
   ];
 
@@ -377,11 +401,26 @@
     { x: 0.2, y: 0.62 }, { x: 0.5, y: 0.68 }, { x: 0.8, y: 0.62 }
   ];
 
+  // Колода без повторов, как у 🎲 на фото (captions.js): тасуем один раз, раздаём по одной.
+  // Раньше был чистый Math.random() с возвратом — одна и та же концепция могла выпасть дважды
+  // подряд даже при 10 доступных.
+  function shuffle(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+  let pileOnDeck = [];
+
   document.getElementById('pileOnBtn').addEventListener('click', () => {
     if (!video.duration) { toast('Сначала загрузи видео'); return; }
-    const available = PILE_ON_BANK.filter(c => !mmPublishedHasPileon(c.event));
-    if (!available.length) { toast('Все концепции pile-on уже опубликованы'); return; }
-    const concept = available[Math.floor(Math.random() * available.length)];
+    if (!pileOnDeck.length) pileOnDeck = shuffle(PILE_ON_BANK.filter(c => !mmPublishedHasPileon(c.event)));
+    // Концепцию могли опубликовать уже после того, как колода была построена.
+    while (pileOnDeck.length && mmPublishedHasPileon(pileOnDeck[pileOnDeck.length - 1].event)) pileOnDeck.pop();
+    if (!pileOnDeck.length) { toast('Все концепции pile-on уже опубликованы'); return; }
+    const concept = pileOnDeck.pop();
     const dur = video.duration;
 
     state.eventText = concept.event;
@@ -537,12 +576,21 @@
   });
 
   document.getElementById('newVideoBtn').addEventListener('click', () => {
+    // «Новое видео» ничего не сбрасывало: state.badges/eventText и автосохранение оставались
+    // от прошлого ролика, и restoreOrInit() при загрузке следующего файла молча накладывал
+    // старые плашки (с чужими позициями/таймингом) на новую картинку.
     video.pause();
     video.removeAttribute('src');
     video.load();
     editorArea.style.display = 'none';
     dropcard.style.display = 'block';
     fileInput.value = '';
+    state.badges = [];
+    state.eventText = '';
+    selectedId = null;
+    eventTextInput.value = '';
+    localStorage.removeItem(STORAGE_KEY);
+    renderAll();
   });
 
   // --- Экспорт: рендер плашек на canvas только во время записи ---
@@ -637,6 +685,12 @@
     }
     const drawIntervalId = setInterval(drawFrame, 1000 / 30);
 
+    // recorder.stop() не отдаёт данные синхронно: 'dataavailable' с последним куском и 'stop'
+    // приходят отдельным тиком позже. Раньше finished резолвился сразу после вызова stop(),
+    // не дожидаясь этого события — Blob собирался из пустого (или неполного) chunks. Нашёл
+    // это через собранный вручную вызов renderToWebmBlob(): статус доходил до «добавлено
+    // в очередь», а blob.size был 0 при любой длине ролика — гонка, а не сбой конкретного клипа.
+    const recorderStopped = new Promise(res => { recorder.onstop = res; });
     const finished = new Promise(resolve => {
       function stop() {
         if (stopped) return;
@@ -644,7 +698,7 @@
         clearInterval(drawIntervalId);
         video.pause();
         recorder.stop();
-        resolve();
+        recorderStopped.then(resolve);
       }
       video.onended = stop;
       video.ontimeupdate = () => { if (video.currentTime >= rangeEnd) stop(); };
@@ -667,6 +721,18 @@
     hintEl.textContent = rate ? `Ориентир: конвертация в MP4 ~${rate} сек на каждые 10 сек видео (по замеру на этом устройстве).` : '';
   }
 
+  // Основной путь — «скачал/поделился → запостил». Раньше защита от повторов и дедуп
+  // концепций pile-on срабатывали только через «Очередь → ✅ Опубликовано»: прямое скачивание
+  // WebM/MP4 их обходило, и 🎲 мог снова предложить концепцию, которая уже вышла.
+  function offerMarkPublished() {
+    if (!state.eventText) return;
+    if (mmPublishedHasPileon(state.eventText)) { toast('Готово · эта концепция уже отмечена опубликованной'); return; }
+    toastAction('Готово. Выложил?', '✓ Отметить опубликованным', () => {
+      mmPublishedAdd({ type: 'pileon', text: state.eventText });
+      toast('Отмечено — эту концепцию больше не предложу');
+    });
+  }
+
   async function exportVideo(kind) {
     const webmBlob = await renderToWebmBlob();
     if (!webmBlob) return;
@@ -675,6 +741,7 @@
     if (kind === 'webm') {
       downloadBlob(webmBlob, 'mem-' + Date.now() + '.webm');
       exportStatus.textContent = 'WebM готов и скачан.';
+      offerMarkPublished();
       return;
     }
 
@@ -698,27 +765,28 @@
         lastMp4Blob = mp4Blob;
         downloadBlob(mp4Blob, 'mem-' + Date.now() + '.mp4');
         exportStatus.textContent = `MP4 готов и скачан (конвертация заняла ${elapsedSec.toFixed(1)} сек).`;
+        offerMarkPublished();
       } catch (e) {
         console.warn('ffmpeg.wasm недоступен', e);
         downloadBlob(webmBlob, 'mem-' + Date.now() + '.webm');
         exportStatus.textContent = 'MP4-конвертация недоступна (нет сети или ffmpeg.wasm не загрузился). Скачан WebM — Threads его принимает, либо сконвертируй любым конвертером.';
+        offerMarkPublished();
       }
       return;
     }
 
     if (kind === 'queue') {
-      const plannedDate = prompt('Плановая дата публикации (ГГГГ-ММ-ДД):', new Date().toISOString().slice(0, 10));
-      if (plannedDate === null) return;
-      const slot = prompt('Слот: утро или вечер?', 'утро') || 'утро';
-      const topic = prompt('Тема (для памяти):', '') || '';
+      const { plannedDate, slot } = await mmNextFreeSlot();
+      const topic = (state.eventText || state.badges.map(b => b.text).filter(Boolean).join(' / ')).slice(0, 120);
       await mmAdd('queue', {
         kind: 'video', blob: webmBlob, mime: 'video/webm',
         plannedDate, slot, topic, createdAt: Date.now(),
         eventText: state.eventText, badgeTexts: state.badges.map(b => b.text),
         published: false
       });
-      exportStatus.textContent = 'Добавлено в очередь постов (WebM).';
-      toast('Добавлено в очередь постов');
+      const [, m, d] = plannedDate.split('-');
+      exportStatus.textContent = `Добавлено в очередь на ${d}.${m}, ${slot}.`;
+      toast(`В очередь на ${d}.${m}, ${slot}`);
     }
   }
 
@@ -771,6 +839,30 @@
   document.getElementById('exportWebmBtn').addEventListener('click', () => exportVideo('webm'));
   document.getElementById('exportMp4Btn').addEventListener('click', () => exportVideo('mp4'));
   document.getElementById('saveDraftBtn').addEventListener('click', () => exportVideo('queue'));
+
+  // «Поделиться» (телефон): сразу в Threads/Telegram без поиска файла в галерее.
+  // Показывается, только если браузер умеет делиться видеофайлами (не все умеют).
+  const shareVideoBtn = document.getElementById('shareVideoBtn');
+  const canShareVideo = !!(navigator.canShare && navigator.share &&
+    navigator.canShare({ files: [new File([new Uint8Array(1)], 'probe.webm', { type: 'video/webm' })] }));
+  if (canShareVideo) {
+    shareVideoBtn.hidden = false;
+    document.getElementById('exportWebmBtn').classList.remove('primary');
+  }
+  shareVideoBtn.addEventListener('click', async () => {
+    const webmBlob = await renderToWebmBlob();
+    if (!webmBlob) return;
+    lastWebmBlob = webmBlob;
+    const file = new File([webmBlob], 'mem-' + Date.now() + '.webm', { type: 'video/webm' });
+    try {
+      await navigator.share({ files: [file] });
+    } catch (e) {
+      if (e && e.name === 'AbortError') return;
+      toast('Поделиться не вышло — скачай WebM');
+      return;
+    }
+    offerMarkPublished();
+  });
 
   document.getElementById('videoTrophyBtn').addEventListener('click', async () => {
     if (!state.badges.length && !state.eventText) { toast('Нечего сохранять — добавь плашки'); return; }

@@ -1818,35 +1818,12 @@
   }
 
   // --- Очередь постов и Трофеи ---
-  // Очередь — запас постов «утро + вечер». Раньше постановка спрашивала три системных
-  // prompt() подряд (дата в формате ГГГГ-ММ-ДД, слот, тема). Теперь пост встаёт в ближайший
-  // свободный слот, а тема — это его же подписи.
-  function localIsoDate(d) {
-    const pad = n => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-  }
-
-  async function nextFreeSlot() {
-    const pending = (await mmGetAll('queue')).filter(it => !it.published);
-    const taken = new Set(pending.map(it => it.plannedDate + '|' + it.slot));
-    const now = new Date();
-    for (let d = 0; d < 90; d++) {
-      const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() + d);
-      const iso = localIsoDate(day);
-      for (const slot of ['утро', 'вечер']) {
-        // Сегодняшнее утро после полудня и вечер после 21:00 уже прошли.
-        if (d === 0 && slot === 'утро' && now.getHours() >= 12) continue;
-        if (d === 0 && slot === 'вечер' && now.getHours() >= 21) continue;
-        if (!taken.has(iso + '|' + slot)) return { plannedDate: iso, slot };
-      }
-    }
-    return { plannedDate: localIsoDate(now), slot: 'вечер' };
-  }
-
+  // Ближайший свободный слот «утро/вечер» — mmNextFreeSlot в app.js (общая для фото и видео,
+  // раньше здесь спрашивались три system prompt() подряд).
   document.getElementById('queueBtn').addEventListener('click', async () => {
     if (!img) return;
     const meta = postMeta();
-    const { plannedDate, slot } = await nextFreeSlot();
+    const { plannedDate, slot } = await mmNextFreeSlot();
     const topic = captions.map(c => c.text).filter(Boolean).join(' / ').slice(0, 120);
     const file = dataUrlToFile(cleanPngDataUrl(), 'mem.png');
     await mmAdd('queue', {

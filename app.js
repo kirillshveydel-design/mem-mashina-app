@@ -9,6 +9,32 @@ function toast(msg, ms = 2400) {
   toast._t = setTimeout(() => { el.style.display = 'none'; }, ms);
 }
 
+// --- Очередь постов: ближайший свободный слот «утро/вечер», общая для фото и видео ---
+// Раньше постановка в очередь спрашивала три системных prompt() подряд (дата в формате
+// ГГГГ-ММ-ДД, слот, тема) — и в фоторедакторе, и в видео. Теперь пост сам встаёт в ближайший
+// свободный слот.
+function mmLocalIsoDate(d) {
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+async function mmNextFreeSlot() {
+  const pending = (await mmGetAll('queue')).filter(it => !it.published);
+  const taken = new Set(pending.map(it => it.plannedDate + '|' + it.slot));
+  const now = new Date();
+  for (let d = 0; d < 90; d++) {
+    const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() + d);
+    const iso = mmLocalIsoDate(day);
+    for (const slot of ['утро', 'вечер']) {
+      // Сегодняшнее утро после полудня и вечер после 21:00 уже прошли.
+      if (d === 0 && slot === 'утро' && now.getHours() >= 12) continue;
+      if (d === 0 && slot === 'вечер' && now.getHours() >= 21) continue;
+      if (!taken.has(iso + '|' + slot)) return { plannedDate: iso, slot };
+    }
+  }
+  return { plannedDate: mmLocalIsoDate(now), slot: 'вечер' };
+}
+
 // Тост с одной кнопкой действия — висит дольше обычного, чтобы успеть нажать.
 function toastAction(msg, label, onAction, ms = 9000) {
   const el = document.getElementById('toast');
