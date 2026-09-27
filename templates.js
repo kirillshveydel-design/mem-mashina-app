@@ -10,9 +10,14 @@
   const statusText = document.getElementById('statusText');
   const ownFileInput = document.getElementById('ownFileInput');
 
+  // Шаблон с рецептом открывается уже собранным мемом: человек пришёл за мемом, а не за
+  // пустой картинкой, к которой ещё надо найти и нажать 🎲. Не понравилось — 🎲 ещё раз.
   function openInEditor(src) {
     window.mmSwitchTab('photo');
-    window.__memMachine.loadImageFromSource(src);
+    const hasRecipe = window.__memFormats && window.__memFormats.formatFor(src);
+    window.__memMachine.loadImageFromSource(src, () => {
+      if (hasRecipe) document.getElementById('captionRollBtn').click();
+    });
   }
 
   async function toDataURL(url) {
@@ -30,11 +35,33 @@
     }
   }
 
+  // Быстрый выбор на пустом экране «Фото»: те же шаблоны с рецептом, клик — готовый мем.
+  // Чтобы начать, не нужно знать про вкладку «Шаблоны».
+  function renderQuickPicks(items) {
+    const box = document.getElementById('quickTemplates');
+    if (!box) return;
+    box.innerHTML = '';
+    items.forEach(it => {
+      const src = 'templates-pack/' + it.file;
+      const fmt = window.__memFormats.formatFor(src);
+      const b = document.createElement('button');
+      b.className = 'quick-tpl';
+      b.title = fmt.hint;
+      b.innerHTML = `<img src="${mmEscapeHtml(src)}" loading="lazy" alt=""><span>${mmEscapeHtml(fmt.title)}</span>`;
+      b.addEventListener('click', () => openInEditor(src));
+      box.appendChild(b);
+    });
+  }
+
   async function loadOfflinePack() {
     try {
       const res = await fetch('templates-pack/metadata.json');
       if (!res.ok) throw new Error('HTTP ' + res.status);
-      const items = await res.json();
+      const all = await res.json();
+      const hasRecipe = it => !!(window.__memFormats && window.__memFormats.formatFor('templates-pack/' + it.file));
+      // Шаблоны, которые собираются сами, — первыми: раньше 12 таких были рассыпаны среди 30.
+      const items = all.filter(hasRecipe).concat(all.filter(it => !hasRecipe(it)));
+      renderQuickPicks(all.filter(hasRecipe));
       packGrid.innerHTML = '';
       items.forEach(it => {
         const div = document.createElement('div');

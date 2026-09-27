@@ -54,15 +54,17 @@
     </div>
 
     <div class="card" id="dropcard">
+      <div class="card-title">🎲 Выбери картинку — мем соберётся сам</div>
+      <div id="quickTemplates" class="quick-grid"></div>
       <div class="dropzone" id="dropzone">
-        Перетащи картинку сюда, вставь из буфера (Ctrl+V) или
+        Или своё фото: перетащи сюда, вставь из буфера (Ctrl+V) или
         <label class="btn" style="display:inline-block; margin-top:8px;">
           выбери файл
           <input type="file" id="fileInput" accept="image/*" style="display:none">
         </label>
       </div>
-      <div class="row" style="margin-top:10px; justify-content:center;">
-        <button id="importPhotoBtn">📂 Импортировать из Claude Code</button>
+      <div class="row" style="margin-top:6px; justify-content:center;">
+        <button id="importPhotoBtn" class="link-btn">📂 Импортировать из Claude Code</button>
       </div>
     </div>
 

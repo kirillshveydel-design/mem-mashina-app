@@ -15,6 +15,10 @@
   let origSrc = null; // исходная картинка без подписей (для Трофеев)
   let sourceRef = null; // откуда пришла картинка — по нему опознаётся формат шаблона
   let sessionStartedAt = null; // момент загрузки текущей картинки — точка отсчёта секундомера
+  // Пока true, render() рисует только сам мем — без рамок выделения, ручек и зелёных рамок
+  // автопоиска. Раньше они уходили в скачанный PNG и в очередь: выделенная подпись
+  // публиковалась с жёлтым пунктиром вокруг.
+  let cleanRender = false;
 
   // Секундомер «от фото до скачивания». Не для отчётности перед кем-то — чтобы честно видеть,
   // действительно ли путь короче трёх минут, а не казаться таким на глаз. Копим последние 50
@@ -122,9 +126,20 @@
 
   function addCaptionPair(top, bottom) {
     removeGenerated();
-    const first = newCaption(top, 0.5, 0.08, { generated: true });
-    captions.push(first, newCaption(bottom, 0.5, 0.92, { generated: true }));
-    selectCaption(first.id);
+    captions.push(
+      newCaption(top, 0.5, 0.08, { generated: true }),
+      newCaption(bottom, 0.5, 0.92, { generated: true })
+    );
+    showFinished();
+  }
+
+  // После броска человек видит готовый мем, а не первую подпись в режиме редактирования:
+  // рамка и развёрнутая панель настроек отодвигали «Скачать» вниз. Править — тапнуть по тексту.
+  function showFinished() {
+    selectedCaptionId = null;
+    syncCaptionEditor();
+    renderCaptionList();
+    render();
   }
 
   // Раскладывает набор реплик по слотам формата: каждая реплика встаёт в свою дырку на
@@ -138,10 +153,7 @@
       if (!text) return;
       captions.push(newCaption(text, slot.x, slot.y, { ...slot, generated: true }));
     });
-    selectedCaptionId = captions.length ? captions[0].id : null;
-    syncCaptionEditor();
-    renderCaptionList();
-    render();
+    showFinished();
   }
 
   // Формат текущей картинки — или null, если это своё фото / шаблон без рецепта.
@@ -897,7 +909,7 @@
       });
     }
 
-    if (p.id === selectedPatchId) {
+    if (p.id === selectedPatchId && !cleanRender) {
       ctx.save();
       ctx.strokeStyle = '#ffcd00';
       ctx.setLineDash([6, 4]);
@@ -1375,7 +1387,7 @@
       ctx.fillText(line, cx, y);
     });
 
-    if (cap.id === selectedCaptionId) {
+    if (cap.id === selectedCaptionId && !cleanRender) {
       ctx.save();
       ctx.strokeStyle = '#ffcd00';
       ctx.setLineDash([6, 4]);
@@ -1412,7 +1424,7 @@
     patchBoxes = patches.map(p => drawPatch(p));
     hitBoxes = captions.map(cap => drawCaption(cap)).filter(Boolean);
 
-    if (creatingRect) {
+    if (creatingRect && !cleanRender) {
       const x = Math.min(creatingRect.x0, creatingRect.x1);
       const y = Math.min(creatingRect.y0, creatingRect.y1);
       const w = Math.abs(creatingRect.x1 - creatingRect.x0);
@@ -1425,7 +1437,7 @@
       ctx.restore();
     }
 
-    if (scanMode && scanCandidates.length) {
+    if (scanMode && scanCandidates.length && !cleanRender) {
       ctx.save();
       scanCandidates.forEach((c, i) => {
         const x = c.x * canvas.width, y = c.y * canvas.height;
@@ -1572,6 +1584,17 @@
       if (hitPatchId !== selectedPatchId) selectPatch(hitPatchId);
       canvas.setPointerCapture(e.pointerId);
       canvas.style.cursor = 'grabbing';
+      return;
+    }
+
+    // Тап мимо подписей и замазок — закончить редактирование: снять рамку и свернуть панель.
+    // Раньше убрать выделение было нечем вообще.
+    if (selectedCaptionId != null || selectedPatchId != null) {
+      selectedCaptionId = null;
+      selectedPatchId = null;
+      syncCaptionEditor(); renderCaptionList();
+      syncPatchEditor(); renderPatchList();
+      render();
     }
   });
 
@@ -1656,11 +1679,19 @@
   });
 
   // --- Экспорт ---
+  // Снимок холста без редакторских оверлеев. toDataURL/toBlob копируют пиксели в момент
+  // вызова, поэтому сразу после снимка можно вернуть обычную отрисовку с рамками.
+  function withCleanCanvas(capture) {
+    cleanRender = true;
+    render();
+    try { return capture(); } finally { cleanRender = false; render(); }
+  }
+
   document.getElementById('exportBtn').addEventListener('click', () => {
     if (!img) return;
     const link = document.createElement('a');
     link.download = 'mem-' + Date.now() + '.png';
-    link.href = canvas.toDataURL('image/png');
+    link.href = withCleanCanvas(() => canvas.toDataURL('image/png'));
     link.click();
     logTiming();
   });
@@ -1731,7 +1762,7 @@
     // реально приносят результат. У своего фото формата нет, тогда пишем 'freeform'.
     const fmt = currentFormat();
     const formatKey = fmt ? fmt.key : 'freeform';
-    canvas.toBlob(async blob => {
+    withCleanCanvas(() => canvas.toBlob(async blob => {
       if (!blob) { toast('Не удалось собрать PNG'); return; }
       await mmAdd('queue', {
         kind: 'photo', blob, mime: 'image/png',
@@ -1744,7 +1775,7 @@
       });
       toast('Добавлено в очередь постов');
       logTiming();
-    }, 'image/png');
+    }, 'image/png'));
   });
 
   document.getElementById('trophyBtn').addEventListener('click', async () => {

@@ -433,6 +433,34 @@ header.topbar nav [data-tab].active {
   z-index: 5;
 }
 
+.card-title { font-size: 16px; font-weight: 700; margin-bottom: 10px; }
+
+/* --- Быстрый выбор шаблонов на пустом экране «Фото»: клик — сразу собранный мем --- */
+.quick-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.quick-tpl {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 0 6px;
+  overflow: hidden;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.2;
+}
+.quick-tpl img { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; display: block; }
+.quick-tpl span { padding: 0 4px; }
+/* Телефон: одна горизонтально прокручиваемая лента, чтобы не толкать dropzone за экран */
+@media (max-width: 640px) {
+  .quick-grid { display: flex; overflow-x: auto; scrollbar-width: none; margin: 0 -14px 12px; padding: 0 14px; }
+  .quick-grid::-webkit-scrollbar { display: none; }
+  .quick-tpl { flex: 0 0 96px; }
+}
+
 /* --- «Сегодня»: точка входа над dropzone — мем про свежий инфоповод, а не банк консервов --- */
 #todayCard { border-top: 3px solid var(--accent); }
 #todayCard .draft-card { padding: 10px; flex-wrap: wrap; }
