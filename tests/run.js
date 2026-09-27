@@ -155,5 +155,58 @@ function test(name, fn) {
   });
 })();
 
+// ---------------------------------------------------------------------------
+// formats.js — реакционные шаблоны: на них встаёт свободная пара «верх/низ» (событие, идея).
+// ---------------------------------------------------------------------------
+(function testReactionFormats() {
+  global.window = {};
+  delete require.cache[require.resolve(path.join(__dirname, '..', 'formats.js'))];
+  require(path.join(__dirname, '..', 'formats.js'));
+  const F = global.window.__memFormats;
+
+  test('formats: есть реакционные шаблоны и у всех ровно два слота «верх/низ»', () => {
+    const keys = F.reactionKeys();
+    assert.ok(keys.length >= 3, `реакционных шаблонов мало: ${keys.length}`);
+    keys.forEach(k => {
+      const slots = F.FORMATS[k].slots;
+      assert.strictEqual(slots.length, 2, k);
+      assert.ok(slots[0].y < 0.5 && slots[1].y > 0.5, `${k}: первый слот должен быть сверху, второй снизу`);
+    });
+  });
+
+  test('formats: форматы с другой грамматикой (Дрейк, trade offer) в реакционные не попадают', () => {
+    const keys = F.reactionKeys();
+    assert.ok(!keys.includes('tpl_181913649.jpg'), 'Дрейк');
+    assert.ok(!keys.includes('tpl_309868304.jpg'), 'trade offer');
+  });
+})();
+
+// ---------------------------------------------------------------------------
+// events.js — черновики «Сегодня»: три разные формы, событие в верхе, без низов-заглушек.
+// ---------------------------------------------------------------------------
+(function testEvents() {
+  global.window = {};
+  require(path.join(__dirname, '..', 'events.js'));
+  const E = global.window.__memEvents;
+  const BANNED = ['ИЗ ЭТОГО ЖЕ ПОСТА', 'СТАНЕТ МЕМОМ', 'ТАМОЖНЯ'];
+
+  test('events: пустое событие — пустой список, а не черновики с пустым верхом', () => {
+    assert.deepStrictEqual(E.buildEventDrafts('   '), []);
+  });
+
+  test('events: 3 черновика, событие в верхе, низы различаются, без заглушек и чужих ниш', () => {
+    for (let run = 0; run < 200; run++) {
+      const drafts = E.buildEventDrafts('  релиз   перенесли ');
+      assert.strictEqual(drafts.length, 3);
+      drafts.forEach(d => {
+        assert.ok(d.top.includes('РЕЛИЗ ПЕРЕНЕСЛИ'), `в верхе нет события: ${d.top}`);
+        BANNED.forEach(b => assert.ok(!d.bottom.includes(b), `запрещённый низ: ${d.bottom}`));
+      });
+      const bottoms = new Set(drafts.map(d => d.bottom));
+      assert.strictEqual(bottoms.size, 3, `повтор низа в одной выдаче: ${JSON.stringify(drafts)}`);
+    }
+  });
+})();
+
 console.log(`\n${passed} passed, ${failures} failed`);
 process.exit(failures ? 1 : 0);

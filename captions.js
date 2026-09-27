@@ -299,11 +299,18 @@
     }
   }
 
-  window.__memMachineCaptions = { refreshChipCounts, generatedForNiche, curatedForNiche, REAL_NICHES, nextPair, syncFormat, buildEventDrafts };
+  window.__memMachineCaptions = { refreshChipCounts, generatedForNiche, curatedForNiche, REAL_NICHES, nextPair, syncFormat };
 
   captionRollBtn.addEventListener('click', () => {
     const niche = resolveNiche(currentNiche);
     const fmt = window.__memMachine.currentFormat && window.__memMachine.currentFormat();
+    if (fmt && fmt.grammar === 'topbottom') {
+      // У реакционных картинок своего словаря нет — пара из общего банка, но в слоты шаблона.
+      const pair = nextPair(niche);
+      if (!pair) { toast('В этой нише все варианты уже опубликованы — переключи нишу'); return; }
+      window.__memMachine.applyFormat(fmt, pair);
+      return;
+    }
     if (fmt) {
       const texts = window.__memFormats.nextVariant(fmt.key, niche);
       if (!texts) { toast('Для этого формата в выбранной нише заготовок нет — переключи нишу'); return; }
@@ -316,50 +323,11 @@
     window.__memMachine.addCaptionPair(top, bottom);
   });
 
-  // --- Режим «⚡ Событие»: привязывает свежий инфоповод к той же механике самоиронии ---
-  // Раньше здесь было 3 жёстких шаблона (у двух низ вообще не менялся) — узнаваемо с третьего раза.
-  // Теперь низ собирается из тех же словарей, что и основной банк, поэтому вариантов сотни.
-  // Мелкие бытовые дела от первого лица. Отдельный список, а не переиспользование truth/shame:
-  // те фразы стоят в прошедшем времени и в конструкцию «а я тут ...» встают коряво.
-  const EVENT_TAILS = [
-    'ТРЕТИЙ ЧАС ВЫБИРАЮ ШРИФТ ДЛЯ ПОСТА',
-    'ПЕРЕКЛАДЫВАЮ ЗАДАЧИ ИЗ СПИСКА В СПИСОК',
-    'ЧИНЮ ТО, ЧТО САМ ЖЕ И СЛОМАЛ',
-    'ПЯТЫЙ РАЗ ПЕРЕЧИТЫВАЮ ОДНО ПИСЬМО',
-    'ЖДУ, КОГДА ЗАГРУЗИТСЯ ПРЕВЬЮ',
-    'ОБЪЯСНЯЮ МАМЕ, ЧЕМ Я ЗАНИМАЮСЬ',
-    'ИЩУ, КУДА ДЕЛСЯ МОЙ ПОНЕДЕЛЬНИК',
-    'СМОТРЮ НА ЭТО И МОЛЧУ'
-  ];
-
-  const EVENT_SHAPES = [
-    { top: e => e, bottom: v => 'А Я ТУТ ' + v.tail },
-    { top: e => 'ВСЕ ОБСУЖДАЮТ: ' + e, bottom: v => 'Я В ЭТО ВРЕМЯ ' + v.tail },
-    { top: e => 'МИР: ' + e, bottom: v => 'Я: ' + v.shame },
-    { top: e => e, bottom: () => 'Я УЗНАЛ ОБ ЭТОМ ИЗ ЭТОГО ЖЕ ПОСТА' },
-    { top: e => e, bottom: () => 'ЖДУ, КОГДА ЭТО СТАНЕТ МЕМОМ БЫСТРЕЕ, ЧЕМ Я УСПЕЮ ПОШУТИТЬ' }
-  ];
-
-  function randomPick(arr) {
-    return arr[Math.floor(Math.random() * arr.length)];
-  }
-
-  function buildEventDrafts(rawEvent) {
-    const event = rawEvent.trim().toUpperCase();
-    // Самоиронию тянем из всех ниш сразу — инфоповод обычно не привязан к одной теме.
-    // «Позорную правду» берём из нижней половины формулы «РЕЗЮМЕ/РЕАЛЬНОСТЬ» — это ровно те
-    // самодостаточные фразы, что корректно встают после «Я:».
-    const shamePool = REAL_NICHES.flatMap(n => (VOCAB[n].free[0] || {}).b || []);
-    return shuffle(EVENT_SHAPES).slice(0, 3).map(shape => ({
-      top: shape.top(event),
-      bottom: shape.bottom({ tail: randomPick(EVENT_TAILS), shame: randomPick(shamePool) })
-    }));
-  }
-
+  // --- Режим «⚡ Событие»: черновики собирает events.js (общий с карточкой «Сегодня») ---
   document.getElementById('eventRollBtn').addEventListener('click', () => {
     const raw = document.getElementById('eventInput').value.trim();
     if (!raw) { toast('Сначала опиши, что произошло'); return; }
-    const drafts = buildEventDrafts(raw);
+    const drafts = window.__memEvents.buildEventDrafts(raw);
     const container = document.getElementById('eventResults');
     container.innerHTML = '';
     drafts.forEach(d => {

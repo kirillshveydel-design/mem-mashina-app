@@ -258,6 +258,13 @@ window.__memFormats = (() => {
         v.i.forEach(i => v.you.forEach(y => out.push([i, y])));
         return out;
       }
+    },
+    // Классический мем «верх/низ» на реакционной картинке. Своих словарей у грамматики нет:
+    // пары берутся из общего банка подписей (captions.js) или из черновика события — поэтому
+    // variants пустой, а 🎲 для таких шаблонов обрабатывает captions.js.
+    topbottom: {
+      slots: 2,
+      variants: () => []
     }
   };
 
@@ -268,6 +275,12 @@ window.__memFormats = (() => {
   // ---------------------------------------------------------------------------
   const DARK = { color: '#111111', stroke: 'transparent' };
   const LIGHT = { color: '#ffffff', stroke: '#000000' };
+  // Верх и низ по всей ширине. Подпись прижимается внутрь кадра при отрисовке (editor.js),
+  // поэтому длинная фраза у края не уходит за границу картинки.
+  const TOP_BOTTOM = [
+    { x: 0.5, y: 0.07, maxW: 0.92, fontSize: 40, ...LIGHT },
+    { x: 0.5, y: 0.93, maxW: 0.92, fontSize: 40, ...LIGHT }
+  ];
 
   const FORMATS = {
     'tpl_181913649.jpg': {
@@ -340,7 +353,13 @@ window.__memFormats = (() => {
         { x: 0.21, y: 0.30, maxW: 0.38, fontSize: 18, ...LIGHT },
         { x: 0.73, y: 0.30, maxW: 0.38, fontSize: 18, ...LIGHT }
       ]
-    }
+    },
+    // --- Реакционные картинки: сюда встаёт любая пара «что случилось / моя реакция» ---
+    'tpl_80707627.jpg': { title: 'Грустный Эскобар', hint: 'ждёшь, а ничего не происходит', grammar: 'topbottom', slots: TOP_BOTTOM },
+    'tpl_4087833.jpg': { title: 'Скелет ждёт', hint: 'ждал так долго, что истлел', grammar: 'topbottom', slots: TOP_BOTTOM },
+    'tpl_97984.jpg': { title: 'Девочка и пожар', hint: 'всё горит — а мне нормально', grammar: 'topbottom', slots: TOP_BOTTOM },
+    'tpl_505705955.png': { title: 'Абсолютное кино', hint: 'реакция: это шедевр', grammar: 'topbottom', slots: TOP_BOTTOM },
+    'tpl_101470.jpg': { title: 'Древние пришельцы', hint: 'одно объяснение на всё', grammar: 'topbottom', slots: TOP_BOTTOM }
   };
 
   const REAL_NICHES = ['vayb', 'net', 'ved', 'work'];
@@ -407,5 +426,10 @@ window.__memFormats = (() => {
     }));
   }
 
-  return { formatFor, nextVariant, list, countFor, GRAMMARS, FORMATS };
+  // Шаблоны, на которые встаёт свободная пара «верх/низ» (событие, идея из блокнота).
+  function reactionKeys() {
+    return Object.keys(FORMATS).filter(k => FORMATS[k].grammar === 'topbottom');
+  }
+
+  return { formatFor, nextVariant, list, countFor, reactionKeys, GRAMMARS, FORMATS };
 })();

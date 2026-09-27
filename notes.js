@@ -76,33 +76,30 @@
     });
   }
 
-  // Идея → картинка. Ниша темы известна (она унаследована от пары, из которой тема выросла),
-  // поэтому подбираем формат, у которого в этой нише есть заготовки, и открываем его собранным.
-  // Тема остаётся в блокноте: она задаёт, о чём шутить, а формат — как это показать.
+  // Идея → картинка. Раньше сюда подставлялся случайный вариант из банка формата, никак не
+  // связанный с текстом идеи: нажал 🖼 на «таможня завернула груз» — получил мем про агентов.
+  // Теперь в мем идёт сама идея. Темы из генератора имеют вид «заявка — приземление» и делятся
+  // на верх и низ; свою заметку без тире ставим целиком наверх — низ человек допишет сам.
+  function splitIdea(text) {
+    const parts = String(text).split(' — ');
+    if (parts.length >= 2) return [parts[0], parts.slice(1).join(' — ')];
+    return [String(text), ''];
+  }
+
   function toMeme(note) {
     const formats = window.__memFormats;
-    if (!formats) { toast('Форматы не загрузились'); return; }
-    const niche = note.niche || 'all';
-    const fitting = formats.list(niche).filter(f => f.count > 0);
-    if (!fitting.length) { toast('Под эту идею формата не нашлось'); return; }
-    // Среди подходящих форматов чуть сильнее налегаем на тот, что реально приносит
-    // вовлечённость (см. stats.js) — без данных выбор остаётся равномерным случайным.
-    let pick;
-    if (window.__memStats) {
-      const keys = fitting.map(f => f.key);
-      const pickedKey = window.__memStats.weightedPick(keys, window.__memStats.formatScores());
-      pick = fitting.find(f => f.key === pickedKey) || fitting[0];
-    } else {
-      pick = fitting[Math.floor(Math.random() * fitting.length)];
-    }
-    const fmt = formats.formatFor(pick.key);
-    const texts = formats.nextVariant(pick.key, niche);
-    if (!texts) { toast('Заготовки для этого формата кончились'); return; }
+    const keys = formats ? formats.reactionKeys() : [];
+    if (!keys.length) { toast('Шаблоны не загрузились'); return; }
+    const key = window.__memStats
+      ? window.__memStats.weightedPick(keys, window.__memStats.formatScores())
+      : keys[Math.floor(Math.random() * keys.length)];
+    const fmt = formats.formatFor(key);
+    const texts = splitIdea(note.text);
     window.mmSwitchTab('photo');
-    window.__memMachine.loadImageFromSource('templates-pack/' + pick.key, () => {
+    window.__memMachine.loadImageFromSource('templates-pack/' + key, () => {
       window.__memMachine.applyFormat(fmt, texts);
     });
-    toast(`Формат «${fmt.title}» — ${fmt.hint}`);
+    toast(texts[1] ? `Идея на картинке «${fmt.title}»` : `Идея наверху «${fmt.title}» — допиши низ`);
   }
 
   function addNote() {
