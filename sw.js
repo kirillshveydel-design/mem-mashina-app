@@ -1,5 +1,5 @@
 // Service worker «Мем-машина» — офлайн-кэш SPA + офлайн-пак шаблонов
-const CACHE_NAME = 'mem-mashina-v38';
+const CACHE_NAME = 'mem-mashina-v39';
 const ASSETS = [
   './',
   './index.html',
@@ -17,6 +17,7 @@ const ASSETS = [
   './templates.js',
   './queue.js',
   './notes.js',
+  './radar.js',
   './tabs.js',
   './manifest.json',
   './icons/icon-192.png',
@@ -78,6 +79,21 @@ self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
   // Внешние API (imgflip, reddit, ffmpeg cdn) не кэшируем — пусть идут в сеть как есть
   if (url.origin !== self.location.origin) return;
+
+  // radar/ каждый /radar-прогон переписывает заново — cache-first показал бы вчерашнюю ленту
+  // до ручного «Обновить приложение». Сеть первой, кэш — офлайн-фолбэк.
+  if (url.pathname.includes('/radar/')) {
+    event.respondWith(
+      fetch(event.request).then(res => {
+        if (res.ok && event.request.method === 'GET') {
+          const clone = res.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+        }
+        return res;
+      }).catch(() => caches.match(event.request))
+    );
+    return;
+  }
 
   event.respondWith(
     caches.match(event.request).then(cached => {

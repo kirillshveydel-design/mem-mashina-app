@@ -1,6 +1,6 @@
 // SPA-переключение вкладок без перезагрузки страницы — состояние табов не теряется
 (() => {
-  const TABS = ['photo', 'video', 'templates', 'queue', 'notes'];
+  const TABS = ['photo', 'video', 'templates', 'queue', 'notes', 'radar'];
 
   function switchTab(name) {
     if (!TABS.includes(name)) return;
@@ -13,6 +13,7 @@
     if (name === 'queue' && window.__memMachineQueue) window.__memMachineQueue.refresh();
     if (name === 'photo' && window.__memMachineCaptions) window.__memMachineCaptions.refreshChipCounts();
     if (name === 'notes' && window.__memMachineNotes) window.__memMachineNotes.refreshBankStatus();
+    if (name === 'radar' && window.__memMachineRadar) window.__memMachineRadar.refresh();
   }
 
   document.querySelectorAll('nav [data-tab]').forEach(btn => {

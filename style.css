@@ -537,3 +537,16 @@ header.topbar nav [data-tab].active {
 
 /* --- Кнопка внутри тоста («✓ Отметить опубликованным») --- */
 .toast .toast-action { padding: 4px 10px; margin-left: 6px; font-size: 13px; }
+
+/* --- Вкладка «Радар»: карточки готовых раскадровок из свежих инфоповодов --- */
+.radar-list { display: flex; flex-direction: column; gap: 12px; }
+.radar-card { display: flex; flex-direction: column; gap: 8px; }
+.radar-thumb {
+  width: 100%;
+  max-width: 320px;
+  border-radius: 8px;
+  align-self: center;
+  display: block;
+}
+.radar-variants { flex-wrap: wrap; }
+.radar-variant-btn { background: var(--accent); color: var(--accent-text); font-weight: 600; }

@@ -32,6 +32,7 @@
     <button data-tab="templates">Шаблоны</button>
     <button data-tab="queue">Очередь</button>
     <button data-tab="notes">Идеи</button>
+    <button data-tab="radar">📡 Радар</button>
   </nav>
 </header>
 
@@ -491,6 +492,22 @@
     </div>
   </section>
 
+  <!-- ===================== РАДАР ===================== -->
+  <section id="tab-radar" style="display:none;">
+    <div class="card">
+      <div class="card-title">📡 Радар свежих инфоповодов</div>
+      <div class="muted">
+        Раз в день (или когда попросишь) запускаю в чате <code>/radar</code> — сам ищу свежее
+        в X/Threads/интервью, собираю раскадровку и кладу сюда. Открой мем → тап по варианту
+        подписи → редактируется и публикуется как обычно.
+      </div>
+    </div>
+    <div id="radarList" class="radar-list"></div>
+    <div class="muted card" id="radarEmpty" style="display:none;">
+      Пока пусто — попроси в чате «запусти <code>/radar</code>».
+    </div>
+  </section>
+
 </main>
 
 <div class="toast" id="toast" style="display:none;"></div>
@@ -508,6 +525,7 @@
 <script src="templates.js"></script>
 <script src="queue.js"></script>
 <script src="notes.js"></script>
+<script src="radar.js"></script>
 <script src="tabs.js"></script>
 </body>
 </html>
