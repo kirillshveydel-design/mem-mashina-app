@@ -9,6 +9,26 @@ function toast(msg, ms = 2400) {
   toast._t = setTimeout(() => { el.style.display = 'none'; }, ms);
 }
 
+// Тост с одной кнопкой действия — висит дольше обычного, чтобы успеть нажать.
+function toastAction(msg, label, onAction, ms = 9000) {
+  const el = document.getElementById('toast');
+  if (!el) return;
+  el.innerHTML = '';
+  const text = document.createElement('span');
+  text.textContent = msg + ' ';
+  const btn = document.createElement('button');
+  btn.className = 'primary toast-action';
+  btn.textContent = label;
+  btn.addEventListener('click', () => {
+    el.style.display = 'none';
+    onAction();
+  });
+  el.append(text, btn);
+  el.style.display = 'block';
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => { el.style.display = 'none'; }, ms);
+}
+
 // Всё, что приходит не из кода (заголовки мемов из Lemmy/Imgflip, заметки, подписи, темы),
 // вставляется в innerHTML только через это экранирование: заголовок поста в Lemmy пишет
 // кто угодно, и без него строка вида <img onerror=...> исполнилась бы у нас на странице.

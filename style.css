@@ -534,3 +534,6 @@ header.topbar nav [data-tab].active {
   border-radius: 999px;
   pointer-events: none;
 }
+
+/* --- Кнопка внутри тоста («✓ Отметить опубликованным») --- */
+.toast .toast-action { padding: 4px 10px; margin-left: 6px; font-size: 13px; }

@@ -37,17 +37,19 @@
     const s = Math.round(ms / 1000);
     return s < 60 ? `${s}с` : `${Math.floor(s / 60)}м ${s % 60}с`;
   }
+  // Возвращает короткую строку для тоста («⏱ 1м 12с, медиана 2м 03с») или '' — тост собирает
+  // вызывающий код, чтобы секундомер не перекрывал тост с действием.
   function logTiming() {
-    if (!sessionStartedAt) return;
+    if (!sessionStartedAt) return '';
     const elapsed = Date.now() - sessionStartedAt;
     const list = loadTimings();
     list.push(elapsed);
     if (list.length > 50) list.shift();
     localStorage.setItem(TIMING_KEY, JSON.stringify(list));
     const m = median(list);
-    toast(`⏱ Этот мем — ${fmtDuration(elapsed)}. Медиана за последние ${list.length}: ${fmtDuration(m)}`);
     // Одна попытка = одно измерение: следующее действие уже новая картинка или тот же файл заново.
     sessionStartedAt = null;
+    return `⏱ ${fmtDuration(elapsed)} (медиана ${fmtDuration(m)})`;
   }
   let cropMode = null; // null | 'square' | 'portrait'
   const MAX_DIM = 1600;
@@ -1687,13 +1689,79 @@
     try { return capture(); } finally { cleanRender = false; render(); }
   }
 
+  // Что за мем сейчас на холсте — для журнала публикаций и очереди.
+  function postMeta() {
+    const activeChip = document.querySelector('#nicheChips .active');
+    // Формат картинки (Дрейк, мозги...) — ключ, по которому считается, какие форматы реально
+    // приносят результат. У своего фото формата нет — 'freeform'.
+    const fmt = currentFormat();
+    return {
+      // Для дедупа в published-log достаточно первых двух подписей (историческая пара верх/низ).
+      topText: captions[0] ? captions[0].text : '',
+      bottomText: captions[1] ? captions[1].text : '',
+      niche: activeChip ? activeChip.dataset.niche : 'all',
+      formatKey: fmt ? fmt.key : 'freeform'
+    };
+  }
+
+  // Основной путь — «скачал/поделился → запостил». Раньше отметка «опубликовано» была только
+  // в очереди, и этот путь обходил и защиту от повторов, и учёт результатов: мем, который
+  // реально вышел, 🎲 мог предложить снова. Теперь после экспорта — одна кнопка в тосте.
+  function offerMarkPublished(timing) {
+    const meta = postMeta();
+    const prefix = timing ? timing + ' · ' : '';
+    if (!meta.topText && !meta.bottomText) { toast(prefix + 'Готово'); return; }
+    if (mmPublishedHasCaption(meta.topText, meta.bottomText)) { toast(prefix + 'Готово · этот мем уже отмечен опубликованным'); return; }
+    toastAction(prefix + 'Готово. Выложил?', '✓ Отметить опубликованным', () => {
+      mmPublishedAdd({
+        type: 'caption', text_top: meta.topText, text_bottom: meta.bottomText,
+        niche: meta.niche, memFormatKey: meta.formatKey, format: 'photo'
+      });
+      if (window.__memMachineCaptions) window.__memMachineCaptions.refreshChipCounts();
+      toast('Отмечено — больше не предложу. Лайки внеси потом в «Очередь → История»', 4000);
+    });
+  }
+
+  function cleanPngDataUrl() {
+    return withCleanCanvas(() => canvas.toDataURL('image/png'));
+  }
+
   document.getElementById('exportBtn').addEventListener('click', () => {
     if (!img) return;
     const link = document.createElement('a');
     link.download = 'mem-' + Date.now() + '.png';
-    link.href = withCleanCanvas(() => canvas.toDataURL('image/png'));
+    link.href = cleanPngDataUrl();
     link.click();
-    logTiming();
+    offerMarkPublished(logTiming());
+  });
+
+  // «Поделиться» (телефон): сразу в Threads/Telegram без поиска картинки в галерее.
+  // Файл собирается синхронно из dataURL — асинхронный toBlob на iOS теряет жест пользователя,
+  // и share() отклоняется. Кнопка показывается, только если браузер умеет делиться файлами.
+  const shareBtn = document.getElementById('shareBtn');
+  function dataUrlToFile(dataUrl, name) {
+    const bin = atob(dataUrl.split(',')[1]);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new File([bytes], name, { type: 'image/png' });
+  }
+  const canShareFiles = !!(navigator.canShare && navigator.share &&
+    navigator.canShare({ files: [new File([new Uint8Array(1)], 'probe.png', { type: 'image/png' })] }));
+  if (canShareFiles) {
+    shareBtn.hidden = false;
+    document.getElementById('exportBtn').classList.remove('primary');
+  }
+  shareBtn.addEventListener('click', async () => {
+    if (!img) return;
+    const file = dataUrlToFile(cleanPngDataUrl(), 'mem-' + Date.now() + '.png');
+    try {
+      await navigator.share({ files: [file] });
+    } catch (e) {
+      if (e && e.name === 'AbortError') return;
+      toast('Поделиться не вышло — скачай PNG');
+      return;
+    }
+    offerMarkPublished(logTiming());
   });
 
   function resetEditor() {
@@ -1750,32 +1818,47 @@
   }
 
   // --- Очередь постов и Трофеи ---
+  // Очередь — запас постов «утро + вечер». Раньше постановка спрашивала три системных
+  // prompt() подряд (дата в формате ГГГГ-ММ-ДД, слот, тема). Теперь пост встаёт в ближайший
+  // свободный слот, а тема — это его же подписи.
+  function localIsoDate(d) {
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  }
+
+  async function nextFreeSlot() {
+    const pending = (await mmGetAll('queue')).filter(it => !it.published);
+    const taken = new Set(pending.map(it => it.plannedDate + '|' + it.slot));
+    const now = new Date();
+    for (let d = 0; d < 90; d++) {
+      const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() + d);
+      const iso = localIsoDate(day);
+      for (const slot of ['утро', 'вечер']) {
+        // Сегодняшнее утро после полудня и вечер после 21:00 уже прошли.
+        if (d === 0 && slot === 'утро' && now.getHours() >= 12) continue;
+        if (d === 0 && slot === 'вечер' && now.getHours() >= 21) continue;
+        if (!taken.has(iso + '|' + slot)) return { plannedDate: iso, slot };
+      }
+    }
+    return { plannedDate: localIsoDate(now), slot: 'вечер' };
+  }
+
   document.getElementById('queueBtn').addEventListener('click', async () => {
     if (!img) return;
-    const plannedDate = prompt('Плановая дата публикации (ГГГГ-ММ-ДД):', new Date().toISOString().slice(0, 10));
-    if (plannedDate === null) return;
-    const slot = prompt('Слот: утро или вечер?', 'утро') || 'утро';
-    const topic = prompt('Тема (для памяти):', '') || '';
-    const activeChip = document.querySelector('#nicheChips .active');
-    const niche = activeChip ? activeChip.dataset.niche : 'all';
-    // Формат картинки (Дрейк, мозги...) — ключ, по которому позже считается, какие форматы
-    // реально приносят результат. У своего фото формата нет, тогда пишем 'freeform'.
-    const fmt = currentFormat();
-    const formatKey = fmt ? fmt.key : 'freeform';
-    withCleanCanvas(() => canvas.toBlob(async blob => {
-      if (!blob) { toast('Не удалось собрать PNG'); return; }
-      await mmAdd('queue', {
-        kind: 'photo', blob, mime: 'image/png',
-        plannedDate, slot, topic, createdAt: Date.now(),
-        // Для дедупа в published-log достаточно первых двух подписей (историческая пара верх/низ).
-        topText: captions[0] ? captions[0].text : '',
-        bottomText: captions[1] ? captions[1].text : '',
-        niche, formatKey,
-        published: false
-      });
-      toast('Добавлено в очередь постов');
-      logTiming();
-    }, 'image/png'));
+    const meta = postMeta();
+    const { plannedDate, slot } = await nextFreeSlot();
+    const topic = captions.map(c => c.text).filter(Boolean).join(' / ').slice(0, 120);
+    const file = dataUrlToFile(cleanPngDataUrl(), 'mem.png');
+    await mmAdd('queue', {
+      kind: 'photo', blob: file, mime: 'image/png',
+      plannedDate, slot, topic, createdAt: Date.now(),
+      topText: meta.topText, bottomText: meta.bottomText,
+      niche: meta.niche, formatKey: meta.formatKey,
+      published: false
+    });
+    const [, m, d] = plannedDate.split('-');
+    const timing = logTiming();
+    toast(`В очередь на ${d}.${m}, ${slot}` + (timing ? ' · ' + timing : ''), 3500);
   });
 
   document.getElementById('trophyBtn').addEventListener('click', async () => {
