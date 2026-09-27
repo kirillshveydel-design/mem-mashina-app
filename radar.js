@@ -53,6 +53,10 @@
       feed = { items: [] };
     }
     const items = feed.items || [];
+    const upd = document.getElementById('radarUpdated');
+    upd.textContent = feed.updated
+      ? 'Последний прогон радара: ' + new Date(feed.updated).toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })
+      : '';
     list.innerHTML = '';
     empty.style.display = items.length ? 'none' : 'block';
     items.forEach(item => list.appendChild(renderItem(item)));
