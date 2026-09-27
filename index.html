@@ -13,13 +13,18 @@
 <body>
 <header class="topbar">
   <div class="brand">🦆 Мем-машина <span class="muted" id="swVersion" style="font-size:11px; font-weight:normal;"></span></div>
-  <div class="header-actions">
-    <button id="backupBtn" title="Скачать бэкап всех данных">💾 Бэкап</button>
-    <label class="btn" style="display:inline-block; margin:0;">
-      Восстановить
-      <input type="file" id="restoreInput" accept="application/json" style="display:none">
-    </label>
-    <button id="updateAppBtn" title="Снять регистрацию SW, очистить кэш и перезагрузить">🔄 Обновить приложение</button>
+  <!-- Служебное (бэкап, восстановление, обновление) нужно раз в неделю — оно в меню ⚙,
+       а не рядом с навигацией: на телефоне три этих кнопки занимали полэкрана. -->
+  <div class="menu-wrap">
+    <button id="menuBtn" class="icon-btn" aria-haspopup="true" aria-expanded="false" title="Данные и обновление">⚙</button>
+    <div class="menu-panel" id="menuPanel" hidden>
+      <button id="backupBtn" title="Скачать бэкап всех данных">💾 Скачать бэкап</button>
+      <label class="btn">
+        📥 Восстановить из бэкапа
+        <input type="file" id="restoreInput" accept="application/json" style="display:none">
+      </label>
+      <button id="updateAppBtn" title="Снять регистрацию SW, очистить кэш и перезагрузить">🔄 Обновить приложение</button>
+    </div>
   </div>
   <nav>
     <button data-tab="photo" class="active">Фото</button>

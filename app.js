@@ -373,9 +373,30 @@ function mmInitBackupUI() {
   const HINT_KEY = 'mm_backup_hint_shown';
   if (!localStorage.getItem(HINT_KEY)) {
     localStorage.setItem(HINT_KEY, '1');
-    setTimeout(() => toast('Делай бэкап раз в неделю (кнопка 💾) — очистка кэша браузера стирает данные', 6000), 1500);
+    setTimeout(() => toast('Делай бэкап раз в неделю (⚙ → Скачать бэкап) — очистка кэша браузера стирает данные', 6000), 1500);
   }
 }
 
 window.addEventListener('DOMContentLoaded', mmInitBackupUI);
 if (document.readyState !== 'loading') mmInitBackupUI();
+
+// --- Меню ⚙ в шапке: бэкап, восстановление, обновление ---
+function mmInitMenu() {
+  const btn = document.getElementById('menuBtn');
+  const panel = document.getElementById('menuPanel');
+  if (!btn || !panel || btn.dataset.ready) return;
+  btn.dataset.ready = '1';
+  const setOpen = open => {
+    panel.hidden = !open;
+    btn.setAttribute('aria-expanded', String(open));
+  };
+  btn.addEventListener('click', e => { e.stopPropagation(); setOpen(panel.hidden); });
+  // Кнопки меню делают своё дело и закрывают его; «Восстановить» закрывается после выбора
+  // файла — иначе меню исчезло бы раньше, чем откроется системный диалог.
+  panel.querySelectorAll('button').forEach(b => b.addEventListener('click', () => setOpen(false)));
+  document.getElementById('restoreInput').addEventListener('change', () => setOpen(false));
+  document.addEventListener('click', e => { if (!panel.hidden && !panel.contains(e.target)) setOpen(false); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') setOpen(false); });
+}
+window.addEventListener('DOMContentLoaded', mmInitMenu);
+if (document.readyState !== 'loading') mmInitMenu();

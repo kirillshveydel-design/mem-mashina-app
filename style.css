@@ -45,7 +45,55 @@ header.topbar .brand {
 header.topbar nav {
   display: flex;
   gap: 6px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  order: 1;
+}
+header.topbar .menu-wrap { order: 2; position: relative; }
+
+/* Кнопка-иконка ⚙ и выпадающее меню служебных действий */
+.icon-btn {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 17px;
+  line-height: 1;
+}
+.menu-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 230px;
+  padding: 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .45);
+}
+.menu-panel[hidden] { display: none; }
+.menu-panel button, .menu-panel .btn { text-align: left; margin: 0; }
+
+/* Липкая шапка не должна накрывать карточку, к которой прокрутили через scrollIntoView */
+.card { scroll-margin-top: 66px; }
+
+/* Телефон: бренд и ⚙ в первой строке, вкладки — одной прокручиваемой строкой под ними.
+   Раньше вкладки и служебные кнопки переносились в 4 ряда и занимали ~40% экрана. */
+@media (max-width: 640px) {
+  header.topbar { padding: 8px 12px; row-gap: 8px; }
+  header.topbar nav {
+    order: 3;
+    flex-basis: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+    margin: 0 -12px;
+    padding: 0 12px;
+  }
+  header.topbar nav::-webkit-scrollbar { display: none; }
+  .card { scroll-margin-top: 104px; }
 }
 
 header.topbar nav a,
@@ -183,7 +231,6 @@ header.topbar nav [data-tab].active {
   border-color: var(--accent);
   font-weight: 600;
 }
-.header-actions { display: flex; gap: 6px; margin-right: 6px; }
 
 /* --- Видеоредактор --- */
 #stage {
